@@ -1,7 +1,12 @@
+import sys
+import os
 import pandas as pd
 import numpy as np
-import os
 from datetime import datetime
+
+# Add root to path so we can import config
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from config import config
 
 # --- Config ---
 INITIAL_CAPITAL = 1_000_000.0  # 基础资金
@@ -9,7 +14,7 @@ COMMISSION_RATE = 0.0001
 SLIPPAGE = 0.001
 START_DATE = "2024-10-09"
 END_DATE = datetime.now().strftime("%Y-%m-%d")
-CACHE_DIR = "data_cache"
+CACHE_DIR = config.DATA_CACHE_DIR
 SCORES = {1: 100, 3: 70, 5: 50, 10: 30, 20: 20}
 TOP_N = 10
 
@@ -217,8 +222,10 @@ def run_forced_buy_rolling_strategy(holding_period):
             current_value = pf.get_total_value(closes.loc[today])
             print("{:.1f}".format(current_value))
     # 保存结果
-    pd.DataFrame(pf.daily_holdings_log).to_csv(f"daily_holdings_forced_buy_T{holding_period}.csv", index=False)
-    pd.DataFrame(pf.trade_log).to_csv(f"trade_log_forced_buy_T{holding_period}.csv", index=False)
+    holdings_path = os.path.join(config.DATA_OUTPUT_DIR, f"daily_holdings_forced_buy_T{holding_period}.csv")
+    trade_path = os.path.join(config.DATA_OUTPUT_DIR, f"trade_log_forced_buy_T{holding_period}.csv")
+    pd.DataFrame(pf.daily_holdings_log).to_csv(holdings_path, index=False)
+    pd.DataFrame(pf.trade_log).to_csv(trade_path, index=False)
 
     # 计算绩效
     h_series = pd.Series([h['value'] for h in pf.history])

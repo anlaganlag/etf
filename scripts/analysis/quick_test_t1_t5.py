@@ -1,7 +1,12 @@
+import sys
+import os
 import pandas as pd
 import numpy as np
-import os
 from datetime import datetime
+
+# Add root to path so we can import config
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from config import config
 
 # --- Config ---
 INITIAL_CAPITAL = 1_000_000.0  # 基础资金
@@ -9,7 +14,7 @@ COMMISSION_RATE = 0.0001
 SLIPPAGE = 0.001
 START_DATE = "2024-10-09"
 END_DATE = "2025-01-09"  # 缩短测试期间到3个月
-CACHE_DIR = "data_cache"
+CACHE_DIR = config.DATA_CACHE_DIR
 SCORES = {1: 100, 3: 70, 5: 50, 10: 30, 20: 20}
 TOP_N = 10
 

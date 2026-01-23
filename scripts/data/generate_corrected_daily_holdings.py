@@ -1,7 +1,12 @@
+import sys
+import os
 import pandas as pd
 import numpy as np
-import os
 from datetime import datetime
+
+# Add root to path so we can import config
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from config import config
 
 # --- Config ---
 INITIAL_CAPITAL = 1_000_000.0
@@ -10,7 +15,7 @@ SLIPPAGE = 0.001
 REBALANCE_DAYS = 10  # T10
 START_DATE = "2024-10-09"
 END_DATE = datetime.now().strftime("%Y-%m-%d")
-CACHE_DIR = "data_cache"
+CACHE_DIR = config.DATA_CACHE_DIR
 SCORES = {1: 100, 3: 70, 5: 50, 10: 30, 20: 20}
 TOP_N = 10
 SECTOR_LIMIT = 1
@@ -194,10 +199,13 @@ def run_corrected_simulation():
             print(f"Rebalance {next_day.date()}: Themes = {', '.join(set(themes))}")
 
     # Save results
-    pd.DataFrame(pf.daily_holdings_log).to_csv("daily_holdings_detail_corrected.csv", index=False)
-    pd.DataFrame(pf.trade_log).to_csv("trade_log_corrected.csv", index=False)
-    print("\nCorrected daily snapshots saved to daily_holdings_detail_corrected.csv")
-    print("Corrected trade log saved to trade_log_corrected.csv")
+    detail_path = os.path.join(config.DATA_OUTPUT_DIR, "daily_holdings_detail_corrected.csv")
+    trade_path = os.path.join(config.DATA_OUTPUT_DIR, "trade_log_corrected.csv")
+    
+    pd.DataFrame(pf.daily_holdings_log).to_csv(detail_path, index=False)
+    pd.DataFrame(pf.trade_log).to_csv(trade_path, index=False)
+    print(f"\nCorrected daily snapshots saved to {detail_path}")
+    print(f"Corrected trade log saved to {trade_path}")
 
 if __name__ == "__main__":
     run_corrected_simulation()

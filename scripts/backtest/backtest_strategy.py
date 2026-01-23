@@ -1,12 +1,16 @@
+import sys
+import os
 import pandas as pd
 import numpy as np
-import os
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 
+# Add root to path so we can import config
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from config import config
+
 # Strategy Config
-# Strategy Config
-CACHE_DIR = "data_cache"
+CACHE_DIR = config.DATA_CACHE_DIR
 BENCHMARK_CODE = "sh510300" # HS300 ETF as benchmark
 # Backtest past 1 year
 START_DATE = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")

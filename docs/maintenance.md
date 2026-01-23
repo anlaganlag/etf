@@ -13,6 +13,15 @@ Weights are defined in `config.py`:
 - `r10`: 30 points
 - `r20`: 20 points
 
+### Behavioral Sector Deduplication (Correlation Check)
+To ensure portfolio diversification, the system implements a correlation-based filter in `select_top_etfs`:
+1. **Ranking**: ETFs are first ranked by `Total Score` (and `r5` for ties).
+2. **Correlation Scan**: Before adding a candidate ETF to the final list, the system compares its daily price history (last 120 days) against all *already selected* ETFs.
+3. **Threshold**: 
+   - We calculate the **Pearson Correlation Coefficient** on aligned dates.
+   - If `Max(Correlation) > 0.85`, the candidate is rejected as a duplicate exposure.
+   - This effectively filters out ETFs that behave identically (e.g., two different Chemical ETFs) even if their names differ slightly.
+
 ### Data Pipeline
 1. **Source**: Primarily use `AkShare` (Sina) for real-time and historical ETF data.
 2. **Fallback**: `Baostock` is used for basic list fetching if Sina fails.

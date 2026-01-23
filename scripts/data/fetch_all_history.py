@@ -1,16 +1,20 @@
-from src.data_fetcher import DataFetcher
+import sys
+import os
 import pandas as pd
 from datetime import datetime, timedelta
 import time
-import os
+
+# Add root to path so we can import config & src
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from config import config
+from src.data_fetcher import DataFetcher
 
 def fetch_all():
     print("=== Starting Full ETF History Fetch (Data Warmup) ===")
     
     # 1. Init
-    # Increase cache validity is not needed here as we want to populate it first.
-    # The DataFetcher logic will fetch if cache is missing or old.
-    fetcher = DataFetcher(retry_count=3, retry_delay=1)
+    config.ensure_dirs()
+    fetcher = DataFetcher(retry_count=3, retry_delay=1, cache_dir=config.DATA_CACHE_DIR)
     
     # 2. Get List
     print("Fetching ETF List...")
