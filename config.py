@@ -1,5 +1,20 @@
-class Config:
+import os
 
+class Config:
+    # Path Definitions
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DATA_CACHE_DIR = os.path.join(BASE_DIR, "data_cache")
+    OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+    DATA_OUTPUT_DIR = os.path.join(OUTPUT_DIR, "data")
+    REPORT_OUTPUT_DIR = os.path.join(OUTPUT_DIR, "reports")
+    CHART_OUTPUT_DIR = os.path.join(OUTPUT_DIR, "charts")
+    
+    # Ensure directories exist
+    @classmethod
+    def ensure_dirs(cls):
+        for path in [cls.DATA_CACHE_DIR, cls.DATA_OUTPUT_DIR, cls.REPORT_OUTPUT_DIR, cls.CHART_OUTPUT_DIR]:
+            if not os.path.exists(path):
+                os.makedirs(path, exist_ok=True)
     
     # Strategy Parameters
     # 板块多周期排名评分：进入前N名即得分
@@ -17,3 +32,4 @@ class Config:
 
 
 config = Config()
+config.ensure_dirs()

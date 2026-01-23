@@ -1,12 +1,17 @@
+import os
+import pandas as pd
 from src.data_fetcher import DataFetcher
 from src.etf_ranker import EtfRanker
-import pandas as pd
+from config import config
 
 def main():
     print("=== Starting A-Share ETF Selection System (Baostock Stable Mode) ===")
     
+    # Ensure directories exist
+    config.ensure_dirs()
+    
     # 1. Init
-    fetcher = DataFetcher()
+    fetcher = DataFetcher(cache_dir=config.DATA_CACHE_DIR)
     etf_ranker = EtfRanker(fetcher)
 
     # 2. Get All ETFs
@@ -31,8 +36,9 @@ def main():
     print(final_etfs[cols])
     
     # Save to file
-    final_etfs.to_csv("top_10_etfs.csv", index=False)
-    print("\nResults saved to top_10_etfs.csv")
+    output_path = os.path.join(config.DATA_OUTPUT_DIR, "top_10_etfs.csv")
+    final_etfs.to_csv(output_path, index=False)
+    print(f"\nResults saved to {output_path}")
     
     print("\n--- Market Insight: Dominant Themes ---")
     themes = final_etfs['theme'].value_counts()
