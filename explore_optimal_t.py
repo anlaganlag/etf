@@ -6,7 +6,7 @@ import numpy as np
 
 # 配置
 CAPITAL = 10_000_000.0  # 固定总资金1000万
-COST = 0.0011           # 佣金+滑点
+COST = 0.0           # 佣金+滑点 (本次测试设为0)
 TOP_N = 10
 START = "2024-10-09"
 CACHE = "data_cache"
@@ -46,7 +46,7 @@ def load_data():
     opens = pd.DataFrame({k: v.get('开盘', v['收盘']) for k, v in prices.items()}).sort_index()[START:]
     return closes, opens, name_map
 
-def run_t_strategy(T, closes, opens, name_map):
+def run_t_strategy(T, closes, opens, name_map, save_details=False):
     """运行单个T值策略回测"""
     cap_per_batch = CAPITAL / T
     cash = CAPITAL
@@ -55,6 +55,10 @@ def run_t_strategy(T, closes, opens, name_map):
     history = []
     trades = 0
     dates = closes.index
+    
+    # 详细记录列表
+    detail_holdings_list = []
+    detail_trade_list = []
     
     for i in range(len(dates) - 1):
         today, next_day = dates[i], dates[i+1]
@@ -65,6 +69,35 @@ def run_t_strategy(T, closes, opens, name_map):
                          for c in holdings if not pd.isna(closes.loc[today].get(c)))
         history.append(val)
         
+        # 记录持仓细节 (如果需要)
+        if save_details:
+            # 记录现金
+            detail_holdings_list.append({
+                'date': today.strftime("%Y-%m-%d"),
+                'code': 'CASH',
+                'name': '现金',
+                'theme': '现金',
+                'qty': 0,
+                'value': round(cash, 2),
+                'weight': ''
+            })
+            # 记录持仓
+            total_hold_val = sum(holdings.get(c, 0) * closes.loc[today].get(c, 0) for c in holdings)
+            total_asset = cash + total_hold_val
+            for code, shares in holdings.items():
+                price = closes.loc[today].get(code, 0)
+                mkt_val = shares * price
+                weight = f"{mkt_val/total_asset*100:.1f}%" if total_asset > 0 else "0%"
+                detail_holdings_list.append({
+                    'date': today.strftime("%Y-%m-%d"),
+                    'code': code,
+                    'name': name_map.get(code, code),
+                    'theme': theme(name_map.get(code, "")),
+                    'qty': shares,
+                    'value': round(mkt_val, 2),
+                    'weight': weight
+                })
+
         # 计算动量得分
         scores = pd.Series(0.0, index=closes.columns)
         for d, w in SCORES.items():
@@ -82,10 +115,23 @@ def run_t_strategy(T, closes, opens, name_map):
                 if code in holdings and holdings[code] >= shares:
                     p = opens.loc[next_day].get(code, 0)
                     if not pd.isna(p) and p > 0:
-                        cash += shares * p * (1 - COST)
+                        amt = shares * p * (1 - COST)
+                        cash += amt
                         holdings[code] -= shares
                         if holdings[code] == 0: del holdings[code]
                         trades += 1
+                        
+                        if save_details:
+                            detail_trade_list.append({
+                                'date': next_day.strftime("%Y-%m-%d"),
+                                'code': code,
+                                'name': name_map.get(code, code),
+                                'action': 'SELL',
+                                'price': p,
+                                'shares': shares,
+                                'total_amt': round(amt, 2),
+                                'remaining_cash': round(cash, 2)
+                            })
             batches.remove((buy_idx, batch))
         
         # 买入新批次（如果活跃批次 < T）
@@ -112,6 +158,18 @@ def run_t_strategy(T, closes, opens, name_map):
                     new_batch[code] = shares
                     seen_themes.add(t)
                     trades += 1
+                    
+                    if save_details:
+                        detail_trade_list.append({
+                            'date': next_day.strftime("%Y-%m-%d"),
+                            'code': code,
+                            'name': name_map.get(code, code),
+                            'action': 'BUY',
+                            'price': p,
+                            'shares': shares,
+                            'total_amt': round(cost, 2),
+                            'remaining_cash': round(cash, 2)
+                        })
             
             if new_batch:
                 batches.append((next_idx, new_batch))
@@ -127,6 +185,12 @@ def run_t_strategy(T, closes, opens, name_map):
     dd = ((h / h.cummax() - 1).min()) * 100
     sharpe = (h.pct_change().mean() / h.pct_change().std()) * np.sqrt(252) if h.pct_change().std() > 0 else 0
     
+    # 保存详细CSV
+    if save_details:
+        pd.DataFrame(detail_holdings_list).to_csv(f"daily_holdings_T{T}_rolling.csv", index=False)
+        pd.DataFrame(detail_trade_list).to_csv(f"trade_log_T{T}_rolling.csv", index=False)
+        print(f"✅ 已保存 T{T} 策略详细数据: daily_holdings_T{T}_rolling.csv, trade_log_T{T}_rolling.csv")
+    
     return ret, dd, sharpe, trades
 
 def main():
@@ -140,7 +204,9 @@ def main():
     
     results = []
     for t in range(1, 21):
-        ret, dd, sharpe, trades = run_t_strategy(t, closes, opens, name_map)
+        # 专门为 T14 保存详细数据
+        save_details = (t == 14)
+        ret, dd, sharpe, trades = run_t_strategy(t, closes, opens, name_map, save_details=save_details)
         results.append({'T': t, 'Return': ret, 'MaxDD': dd, 'Sharpe': sharpe, 'Trades': trades})
         print(f"T{t:<3} {ret:>10.2f}% {dd:>10.2f}% {sharpe:>10.2f} {trades:>10}")
     
