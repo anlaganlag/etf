@@ -53,45 +53,53 @@ class EtfRanker:
                 
         return max_corr
 
-    def select_top_etfs(self, candidate_etfs: pd.DataFrame, top_n: int = 10) -> pd.DataFrame:
+    def select_top_etfs(self, candidate_etfs: pd.DataFrame, top_n: int = 10, lookback_days: int = 730, reference_date: str = None, history_cache: dict = None) -> pd.DataFrame:
         """
-        Ranks ETFs using serial processing and applies sector limits using Correlation.
+        Ranks ETFs based on config scores. 
+        Assumes candidate_etfs is already a curated list (one per sector).
+        
+        Args:
+            reference_date: If provided (YYYY-MM-DD), score based on data available up to this date.
+            history_cache: Optional dict {code: full_history_df} to speed up backtesting.
         """
         if candidate_etfs.empty:
             return pd.DataFrame()
 
-        print(f"Ranking {len(candidate_etfs)} ETFs (Serial Mode)...")
-
-        end_date = datetime.now().strftime("%Y-%m-%d")
-        start_date = (datetime.now() - timedelta(days=120)).strftime("%Y-%m-%d")
+        # Determine actual data range needed
+        if reference_date:
+            end_date_str = reference_date
+            end_dt = datetime.strptime(reference_date, "%Y-%m-%d")
+            start_date_str = (end_dt - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+        else:
+            end_date_str = datetime.now().strftime("%Y-%m-%d")
+            end_dt = datetime.now()
+            start_date_str = (end_dt - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
         
         results = []
         
-        # 1. Filter out known non-ETFs if name is empty
-        if 'etf_name' in candidate_etfs.columns:
-             candidate_etfs = candidate_etfs[candidate_etfs['etf_name'] != '']
-        
-        print(f"ETFs after name filter: {len(candidate_etfs)}")
-        total_count = len(candidate_etfs)
-        
-        candidate_histories = {} 
-        
         for idx, (_, row) in enumerate(candidate_etfs.iterrows()):
             code = row['etf_code']
-            name = row['etf_name']
+            # Use provided name/theme if available, else empty
+            name = row.get('etf_name', '')
+            theme = row.get('theme', '')
             
-            if (idx + 1) % 50 == 0:
-                print(f"Progress: {idx + 1}/{total_count}...")
-
-            hist_df = self.fetcher.get_etf_daily_history(code, start_date, end_date)
+            # Fetch history
+            if history_cache and code in history_cache:
+                full_hist = history_cache[code]
+                if full_hist.empty:
+                    continue
+                # Slice in memory
+                mask = (full_hist['日期'] >= pd.to_datetime(start_date_str)) & (full_hist['日期'] <= pd.to_datetime(end_date_str))
+                hist_df = full_hist[mask].copy()
+            else:
+                hist_df = self.fetcher.get_etf_daily_history(code, start_date_str, end_date_str)
             
             if hist_df is None or hist_df.empty or len(hist_df) < 10:
                  continue
             
-            # Ensure Date index for alignment
-            if '日期' in hist_df.columns:
-                hist_df = hist_df.set_index('日期')
-
+            # Ensure Date index for calculations if needed, or just use iloc
+            # DataFetcher returns '日期' and '收盘' columns sorted by date
+            
             current_price = hist_df.iloc[-1]['收盘']
 
             def get_ret(days):
@@ -102,12 +110,7 @@ class EtfRanker:
                     return (current_price - prev_price) / prev_price * 100
                 return -999
 
-            theme = self.get_theme_normalized(name)
-            
-            # Store history for later correlation check
-            candidate_histories[code] = hist_df
-
-            results.append({
+            result = {
                 'etf_code': code,
                 'etf_name': name,
                 'theme': theme,
@@ -118,55 +121,79 @@ class EtfRanker:
                 'r20': get_ret(20),
                 'total_score': 0,
                 'latest_close': current_price
-            })
+            }
+
+            # Add longer periods if available
+            if len(hist_df) > 60:
+                result['r60'] = get_ret(60)
+            if len(hist_df) > 120:
+                result['r120'] = get_ret(120)
+            if len(hist_df) > 250:
+                result['r250'] = get_ret(250)
+
+            results.append(result)
         
         df_res = pd.DataFrame(results)
         if df_res.empty:
             return df_res
 
         # Scoring Logic
-        threshold = max(20, int(len(df_res) * 0.1)) 
+        # Use config.SECTOR_TOP_N_THRESHOLD (default 15)
+        threshold = getattr(config, 'SECTOR_TOP_N_THRESHOLD', 15)
+        
         for period, score in self.scores.items():
             col = f'r{period}'
             if col in df_res.columns:
+                # Get Top N indices
                 top_indices = df_res[col].sort_values(ascending=False).index[:threshold]
                 df_res.loc[top_indices, 'total_score'] += score
 
-        # Sort by score
-        # Secondary sort by r5 (short term) or r20 (long term)? 
-        # r5 breaks ties better for momentum.
-        df_sorted = df_res.sort_values(['total_score', 'r5'], ascending=False)
+        # Sort by total_score desc, then r20 (momentum) desc
+        df_sorted = df_res.sort_values(['total_score', 'r20'], ascending=False)
         
-        # Selection with Correlation Deduplication
-        final_list = []
-        selected_histories = []
+        return df_sorted.head(top_n)
+    def rank_global_strength(self, all_etf_history: pd.DataFrame, whitelist: set, top_n: int = 10, min_score: int = 150) -> pd.DataFrame:
+        """
+        PERFORMS TRUE GLOBAL RANKING (as per documentation).
         
-        # Strict correlation to avoid duplicates
-        CORR_THRESHOLD = 0.85 
-        sector_limit = getattr(config, 'ETF_SECTOR_LIMIT', 999)
+        Args:
+            all_etf_history: DataFrame (Date x Code) of CLOSE prices for ALL ETFs.
+            whitelist: set of codes (Curated List) to filter from.
+            top_n: max holdings.
+            min_score: entry gate.
+        """
+        if all_etf_history.empty: return pd.DataFrame()
         
-        print(f"\nSelecting Top ETFs with Correlation Check (Threshold {CORR_THRESHOLD})...")
+        # 1. Calculate Multi-Period Returns for ALL
+        # periods = {1:100, 3:70, 5:50, 10:30, 20:20, 60:15, 120:10, 250:5}
+        periods = self.scores
+        threshold = getattr(config, 'SECTOR_TOP_N_THRESHOLD', 15)
         
-        for _, row in df_sorted.iterrows():
-            if len(final_list) >= top_n:
-                break
-            
-            code = row['etf_code']
-            theme = row['theme']
-            hist = candidate_histories.get(code)
-            
-            # 1. Correlation Check
-            max_corr = self._calculate_max_correlation(hist, selected_histories)
-            if max_corr > CORR_THRESHOLD:
-                print(f"Skipping {row['etf_name']} ({row['theme']}) - Correlation: {max_corr:.2f}")
-                continue
-            
-            # 2. Keyword/Theme Check via config limit
-            same_theme_count = sum(1 for item in final_list if item['theme'] == theme)
-            if same_theme_count >= sector_limit:
-                 continue
-
-            final_list.append(row)
-            selected_histories.append(hist)
+        total_scores = pd.Series(0.0, index=all_etf_history.columns)
         
-        return pd.DataFrame(final_list)
+        # We assume input df has enough data. Ranks are based on the LAST row vs N-days-ago.
+        for p, pts in periods.items():
+            if len(all_etf_history) > p:
+                ret = (all_etf_history.iloc[-1] / all_etf_history.iloc[-(p+1)] - 1)
+                ranks = ret.rank(ascending=False, method='min')
+                total_scores += (ranks <= threshold) * pts
+        
+        # 2. Add R20 as tie-breaker
+        r20 = (all_etf_history.iloc[-1] / all_etf_history.iloc[-21] - 1) if len(all_etf_history) > 20 else pd.Series(0, index=all_etf_history.columns)
+        
+        # 3. Filter and Sort
+        df_res = pd.DataFrame({
+            'etf_code': all_etf_history.columns,
+            'total_score': total_scores,
+            'r20_mom': r20
+        }).set_index('etf_code')
+        
+        # Whitelist filtering (Only buying curated ones)
+        df_res = df_res[df_res.index.isin(whitelist)]
+        
+        # Score Threshold filtering (The "择时" logic)
+        df_res = df_res[df_res['total_score'] >= min_score]
+        
+        # Final Sort
+        df_sorted = df_res.sort_values(['total_score', 'r20_mom'], ascending=False)
+        return df_sorted.head(top_n)
