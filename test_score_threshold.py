@@ -6,7 +6,7 @@ from src.data_fetcher import DataFetcher
 from config import config
 
 def run_score_scan():
-    print("=== Score Threshold Scan ===")
+    print("=== Score Threshold Scan (T=14, 2024-09-01 Start) ===")
     config.ensure_dirs()
     fetcher = DataFetcher(cache_dir=config.DATA_CACHE_DIR)
     
@@ -23,7 +23,7 @@ def run_score_scan():
 
     # Build Price Matrix
     price_data = {}
-    start_load = "2022-09-01"
+    start_load = "2023-01-01"
     
     for code in all_codes:
         cache_file = os.path.join(config.DATA_CACHE_DIR, f"{code.replace('.', '_')}.csv")
@@ -41,7 +41,7 @@ def run_score_scan():
     
     # Scoring
     scores_rule = config.SECTOR_PERIOD_SCORES
-    threshold = config.SECTOR_TOP_N_THRESHOLD
+    threshold = 15 # Top 15
     
     total_scores = pd.DataFrame(0.0, index=prices_df.index, columns=prices_df.columns)
     for period, pts in scores_rule.items():
@@ -52,37 +52,51 @@ def run_score_scan():
     r20_matrix = prices_df.pct_change(20).fillna(-999)
     daily_rets = prices_df.pct_change(1).shift(-1)
     
-    def pick_top10(date_t, whitelist, min_score):
+    def pick_top10(date_t, whitelist, min_score, max_dd_trace=[]):
         if date_t not in total_scores.index: return []
         s = total_scores.loc[date_t]
+        
+        # Logic: If no threshold, we just pick top 10 from whitelist
+        if min_score == 0:
+            # Simple sorting by score then r20
+            # Note: total_scores are already calculated based on top 15 rank
+            metric = s * 10000 + r20_matrix.loc[date_t]
+            # Filter whitelist
+            valid_metric = metric[metric.index.isin(whitelist)].sort_values(ascending=False)
+            return valid_metric.head(10).index.tolist()
+        
+        # Logic: With threshold
         r = r20_matrix.loc[date_t]
         metric = s * 10000 + r
-        metric = metric.dropna()
-        metric = metric[metric > -99999]
-        
-        if min_score > 0:
-            valid = s[s >= min_score].index
-            metric = metric[metric.index.isin(valid)]
-        
+        valid = s[s >= min_score].index
+        metric = metric[metric.index.isin(valid)]
         sorted_codes = metric.sort_values(ascending=False).index.tolist()
         candidates = [c for c in sorted_codes if c in whitelist]
         return candidates[:10]
     
     # Test Config
-    start_date = '2024-11-01'  # Post-924
+    start_date = '2024-09-01'
     valid_dates = prices_df.index[prices_df.index >= pd.to_datetime(start_date)]
-    T = 20
+    T = 14
     
     print(f"\nPeriod: {start_date} ~ Present")
     print(f"Strategy: T={T}, Top 10\n")
     
-    # Scan thresholds
-    thresholds = [0, 50, 100, 120, 150, 180, 200, 220, 250, 300]
+    # Scan thresholds: 0 is no threshold
+    thresholds = [0, 50, 100, 150, 200, 250, 300]
     
     results = []
     
+    # Calculate MaxDD function
+    def calc_max_dd(vals):
+        arr = np.array(vals)
+        peak = np.maximum.accumulate(arr)
+        drawdowns = (arr - peak) / peak
+        return np.min(drawdowns) * 100
+
     for min_score in thresholds:
         val = 1.0
+        val_curve = [1.0]
         curr_holdings = []
         cash_days = 0
         
@@ -103,12 +117,14 @@ def run_score_scan():
                     day_ret = 0.0
             
             val *= (1 + day_ret)
+            val_curve.append(val)
         
         total_ret = (val - 1.0) * 100
         cash_pct = cash_days / len(valid_dates) * 100
+        max_dd = calc_max_dd(val_curve)
         
-        print(f"  Score≥{min_score:<3}: Return = {total_ret:>6.1f}%, CashDays = {cash_pct:>4.1f}%")
-        results.append({'Score': min_score, 'Return': total_ret, 'CashPct': cash_pct})
+        print(f"  Score≥{min_score:<3}: Return = {total_ret:>6.1f}%, MaxDD = {max_dd:>6.1f}%, CashFreq = {cash_pct:>4.1f}%")
+        results.append({'Score': min_score, 'Return': total_ret, 'MaxDD': max_dd, 'CashPct': cash_pct})
 
     # Find best
     df_res = pd.DataFrame(results)
