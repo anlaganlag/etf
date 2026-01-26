@@ -19,47 +19,32 @@ class EtfRanker:
         self.scores = config.SECTOR_PERIOD_SCORES
 
     def get_theme_normalized(self, name: str) -> str:
-        """Robust theme extraction with higher-level grouping for extreme de-duplication"""
-        if not name or not isinstance(name, str): return "宽基"
+        """Robust theme extraction for meaningful grouping"""
+        if not name: return "Unknown"
         name = name.lower()
-        
-        # Define Group Mapping (Higher-level grouping)
-        group_mapping = {
-            "低空经济/军工": ["卫星", "航天", "军工", "国防", "航空", "机床", "高端装备"],
-            "新能源": ["光伏", "风电", "储能", "新能源", "电池", "锂电"],
-            "资源/有色": ["有色", "稀土", "钢铁", "煤炭", "黄金", "矿业", "金属"],
-            "泛AI/数字": ["半导体", "芯片", "ai", "人工智能", "软件", "信创", "计算", "大数据", "通信", "传媒", "游戏", "动漫"],
-            "红利/金融": ["红利", "银行", "券商", "证券", "保险", "地产", "房地产"],
-            "消费/医疗": ["医药", "医疗", "中药", "创新药", "白酒", "消费", "农业", "食品"],
-            "互联/全球": ["互联网", "港股通", "纳斯达克", "标普", "恒生"]
-        }
-        
-        for group, keywords in group_mapping.items():
-            for k in keywords:
-                if k in name: return group
-        
-        # Fallback: Clean name to find theme
-        theme = name.replace("etf", "").replace("基金", "").replace("增强", "").replace("指数", "").replace("联接", "")
-        for word in ["中证", "沪深", "上证", "深证", "科创", "创业板", "港股通", "300", "500", "1000", "50", "100", "华泰柏瑞", "华夏", "易方达", "嘉实", "国泰", "南方", "富国", "广发", "天弘"]:
+        # Priority keywords for grouping
+        keywords = ["芯片", "半导体", "人工智能", "ai", "红利", "银行", "机器人", "光伏", "白酒", "医药", "医疗", "军工", "新能源", "券商", "证券", "黄金", "纳斯达克", "标普", "信创", "软件", "房地产", "中药"]
+        for k in keywords:
+            if k in name: return k
+        # Fallback
+        theme = name.replace("etf", "").replace("基金", "").replace("增强", "").replace("指数", "")
+        for word in ["中证", "沪深", "上证", "深证", "科创", "创业板", "港股通", "300", "500", "1000", "50", "100"]:
             theme = theme.replace(word.lower(), "")
-        
-        theme = theme.replace(" ", "").strip()
-        return theme if theme else "宽基"
+        return theme.strip() if theme.strip() else "宽基"
 
-    def _calculate_max_correlation(self, target_hist, selected_histories):
-        """Check max correlation of target_hist against selected_histories"""
+    def _calculate_max_correlation(self, target_df, selected_histories):
+        """Check max correlation of target_df against selected_histories"""
         if not selected_histories:
             return 0.0
         
         max_corr = 0.0
-        # DataFetcher returns '日期' and '收盘'
-        target_close = target_hist.set_index('日期')['收盘']
+        # Align lengths. Join on index (Date).
+        target_close = target_df['收盘']
         
-        for pool_hist in selected_histories:
-            pool_close = pool_hist.set_index('日期')['收盘']
-            # Align on Date index
-            combined = pd.concat([target_close, pool_close], axis=1, join='inner')
-            if len(combined) < 15: # Not enough overlapping data
+        for pool_df in selected_histories:
+            # Inner join on Date index
+            combined = pd.concat([target_close, pool_df['收盘']], axis=1, join='inner')
+            if len(combined) < 20: # Not enough overlapping data
                 continue
                 
             corr = combined.iloc[:, 0].corr(combined.iloc[:, 1])
@@ -68,14 +53,14 @@ class EtfRanker:
                 
         return max_corr
 
-    def select_top_etfs(self, candidate_etfs: pd.DataFrame, top_n: int = 10, lookback_days: int = 730, reference_date: str = None, history_cache: dict = None) -> pd.DataFrame:
+    def select_top_etfs(self, candidate_etfs: pd.DataFrame, top_n: int = 10, lookback_days: int = 730, reference_date: str = None, history_cache: dict = None, min_score: int = 0) -> pd.DataFrame:
         """
         Ranks ETFs based on config scores. 
-        Assumes candidate_etfs is already a curated list (one per sector).
         
         Args:
             reference_date: If provided (YYYY-MM-DD), score based on data available up to this date.
             history_cache: Optional dict {code: full_history_df} to speed up backtesting.
+            min_score: Minimum total_score required to be selected (timing gate).
         """
         if candidate_etfs.empty:
             return pd.DataFrame()
@@ -94,15 +79,9 @@ class EtfRanker:
         
         for idx, (_, row) in enumerate(candidate_etfs.iterrows()):
             code = row['etf_code']
-            # Use provided name/theme if available, else infer
+            # Use provided name/theme if available, else empty
             name = row.get('etf_name', '')
             theme = row.get('theme', '')
-            
-            # If theme is missing or NaN, infer it from name
-            if pd.isna(theme) or not str(theme).strip():
-                theme = self.get_theme_normalized(name)
-            
-            # print(f"DEBUG: ETF {code} ({name}) -> Theme: {theme}")
             
             # Fetch history
             if history_cache and code in history_cache:
@@ -169,49 +148,17 @@ class EtfRanker:
                 top_indices = df_res[col].sort_values(ascending=False).index[:threshold]
                 df_res.loc[top_indices, 'total_score'] += score
 
+        # Filter by min_score (The "Timing Gate")
+        if min_score > 0:
+            df_res = df_res[df_res['total_score'] >= min_score]
+
+        if df_res.empty:
+            return pd.DataFrame()
+
         # Sort by total_score desc, then r20 (momentum) desc
         df_sorted = df_res.sort_values(['total_score', 'r20'], ascending=False)
         
-        # Apply Extreme De-duplication: Theme Grouping + Correlation
-        sector_limit = getattr(config, 'ETF_SECTOR_LIMIT', 1)
-        corr_threshold = 0.8  # Threshold for high correlation
-        
-        final_selection = []
-        selected_histories = []
-        theme_counts = {}
-
-        # We MUST iterate through the sorted list and pick the best ones that are unique.
-        for _, row in df_sorted.iterrows():
-            code = row['etf_code']
-            t = row['theme']
-            
-            # A. Theme-based filtering (Higher-level groups)
-            count = theme_counts.get(t, 0)
-            if count >= sector_limit:
-                continue
-            
-            # B. Correlation-based filtering
-            # Re-fetch history for the candidate to check correlation against current selection
-            current_hist = self.fetcher.get_etf_daily_history(code, start_date_str, end_date_str)
-            
-            if current_hist is not None and not current_hist.empty:
-                max_corr = self._calculate_max_correlation(current_hist, selected_histories)
-                
-                # If correlation is too high with ANY already-selected ETF, skip this one
-                if max_corr > corr_threshold:
-                    # print(f"DEBUG: Skipping {row['etf_name']} due to high correlation ({max_corr:.2f})")
-                    continue
-                
-                # Success: This ETF is both high-scoring and unique enough
-                final_selection.append(row.to_dict())
-                selected_histories.append(current_hist)
-                theme_counts[t] = count + 1
-            
-            if len(final_selection) >= top_n:
-                break
-                
-        # Return a fresh DataFrame from the list of dicts
-        return pd.DataFrame(final_selection)
+        return df_sorted.head(top_n)
     def rank_global_strength(self, all_etf_history: pd.DataFrame, whitelist: set, top_n: int = 10, min_score: int = 150) -> pd.DataFrame:
         """
         PERFORMS TRUE GLOBAL RANKING (as per documentation).

@@ -48,11 +48,7 @@ def main():
     base_cols = ['etf_code', 'etf_name', 'theme', 'total_score']
     period_cols = [col for col in ['r250', 'r120', 'r60', 'r20', 'r10', 'r5', 'r1'] if col in final_etfs.columns]
     cols = base_cols + period_cols + ['latest_close']
-    print(final_etfs[cols].to_string())
-    
-    # Debug: Check if themes are all empty
-    if final_etfs['theme'].isna().all() or (final_etfs['theme'] == '').all():
-        print("WARNING: All themes are empty or NaN!")
+    print(final_etfs[cols])
     
     # Save to file
     output_path = os.path.join(config.DATA_OUTPUT_DIR, "top_10_etfs.csv")

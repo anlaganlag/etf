@@ -1,0 +1,100 @@
+=== Analyzing Best Holding Period for ETF Strategy ===
+MyQuant token initialized successfully
+Candidates: 124 (Cross-border excluded)
+
+[Data] Loading price matrix...
+Loading ETF list from cache...
+Matrix shape: (545, 1377)
+[Score] Vectorizing daily rankings (within candidates)...
+Valid candidates in matrix: 124
+Max candidate score found: 300.0
+Simulation dates: 303
+
+[Sim] Scanning Periods [5, 10, 14, 20, 25, 30, 40]...
+DEBUG: T=5 Day 0 2024-09-02 00:00:00 Holdings: 10
+DEBUG: T=5 Day 5 2024-09-09 00:00:00 Holdings: 10
+DEBUG: T=5 Day 10 2024-09-18 00:00:00 Holdings: 10
+DEBUG: T=5 Day 15 2024-09-25 00:00:00 Holdings: 10
+DEBUG: T=5 Day 20 2024-10-09 00:00:00 Holdings: 10
+DEBUG: T=5 Day 25 2024-10-16 00:00:00 Holdings: 10
+DEBUG: T=5 Day 30 2024-10-23 00:00:00 Holdings: 10
+DEBUG: T=5 Day 35 2024-10-30 00:00:00 Holdings: 10
+DEBUG: T=5 Day 40 2024-11-06 00:00:00 Holdings: 10
+DEBUG: T=5 Day 45 2024-11-13 00:00:00 Holdings: 10
+  T=5 : Return=  0.00%, MaxDD=  0.00%, WinRate=0.0%
+DEBUG: T=10 Day 0 2024-09-02 00:00:00 Holdings: 10
+DEBUG: T=10 Day 10 2024-09-18 00:00:00 Holdings: 10
+DEBUG: T=10 Day 20 2024-10-09 00:00:00 Holdings: 10
+DEBUG: T=10 Day 30 2024-10-23 00:00:00 Holdings: 10
+DEBUG: T=10 Day 40 2024-11-06 00:00:00 Holdings: 10
+DEBUG: T=10 Day 50 2024-11-20 00:00:00 Holdings: 10
+DEBUG: T=10 Day 60 2024-12-04 00:00:00 Holdings: 10
+DEBUG: T=10 Day 70 2024-12-18 00:00:00 Holdings: 10
+DEBUG: T=10 Day 80 2025-01-02 00:00:00 Holdings: 10
+DEBUG: T=10 Day 90 2025-01-16 00:00:00 Holdings: 10
+  T=10: Return=  0.00%, MaxDD=  0.00%, WinRate=0.0%
+DEBUG: T=14 Day 0 2024-09-02 00:00:00 Holdings: 10
+DEBUG: T=14 Day 14 2024-09-24 00:00:00 Holdings: 10
+DEBUG: T=14 Day 28 2024-10-21 00:00:00 Holdings: 10
+DEBUG: T=14 Day 42 2024-11-08 00:00:00 Holdings: 10
+DEBUG: T=14 Day 56 2024-11-28 00:00:00 Holdings: 10
+DEBUG: T=14 Day 70 2024-12-18 00:00:00 Holdings: 10
+DEBUG: T=14 Day 84 2025-01-08 00:00:00 Holdings: 10
+DEBUG: T=14 Day 98 2025-02-05 00:00:00 Holdings: 10
+DEBUG: T=14 Day 112 2025-02-25 00:00:00 Holdings: 10
+DEBUG: T=14 Day 126 2025-03-17 00:00:00 Holdings: 10
+  T=14: Return=  0.00%, MaxDD=  0.00%, WinRate=0.0%
+DEBUG: T=20 Day 0 2024-09-02 00:00:00 Holdings: 10
+DEBUG: T=20 Day 20 2024-10-09 00:00:00 Holdings: 10
+DEBUG: T=20 Day 40 2024-11-06 00:00:00 Holdings: 10
+DEBUG: T=20 Day 60 2024-12-04 00:00:00 Holdings: 10
+DEBUG: T=20 Day 80 2025-01-02 00:00:00 Holdings: 10
+DEBUG: T=20 Day 100 2025-02-07 00:00:00 Holdings: 10
+DEBUG: T=20 Day 120 2025-03-07 00:00:00 Holdings: 10
+DEBUG: T=20 Day 140 2025-04-07 00:00:00 Holdings: 10
+DEBUG: T=20 Day 160 2025-05-08 00:00:00 Holdings: 10
+DEBUG: T=20 Day 180 2025-06-06 00:00:00 Holdings: 10
+  T=20: Return=  0.00%, MaxDD=  0.00%, WinRate=0.0%
+DEBUG: T=25 Day 0 2024-09-02 00:00:00 Holdings: 10
+DEBUG: T=25 Day 25 2024-10-16 00:00:00 Holdings: 10
+DEBUG: T=25 Day 50 2024-11-20 00:00:00 Holdings: 10
+DEBUG: T=25 Day 75 2024-12-25 00:00:00 Holdings: 10
+DEBUG: T=25 Day 100 2025-02-07 00:00:00 Holdings: 10
+DEBUG: T=25 Day 125 2025-03-14 00:00:00 Holdings: 10
+DEBUG: T=25 Day 150 2025-04-21 00:00:00 Holdings: 10
+DEBUG: T=25 Day 175 2025-05-29 00:00:00 Holdings: 10
+DEBUG: T=25 Day 200 2025-07-04 00:00:00 Holdings: 10
+DEBUG: T=25 Day 225 2025-09-26 00:00:00 Holdings: 10
+  T=25: Return=  0.00%, MaxDD=  0.00%, WinRate=0.0%
+DEBUG: T=30 Day 0 2024-09-02 00:00:00 Holdings: 10
+DEBUG: T=30 Day 30 2024-10-23 00:00:00 Holdings: 10
+DEBUG: T=30 Day 60 2024-12-04 00:00:00 Holdings: 10
+DEBUG: T=30 Day 90 2025-01-16 00:00:00 Holdings: 10
+DEBUG: T=30 Day 120 2025-03-07 00:00:00 Holdings: 10
+DEBUG: T=30 Day 150 2025-04-21 00:00:00 Holdings: 10
+DEBUG: T=30 Day 180 2025-06-06 00:00:00 Holdings: 10
+DEBUG: T=30 Day 210 2025-07-18 00:00:00 Holdings: 10
+DEBUG: T=30 Day 240 2025-10-27 00:00:00 Holdings: 10
+DEBUG: T=30 Day 270 2025-12-08 00:00:00 Holdings: 10
+  T=30: Return=  0.00%, MaxDD=  0.00%, WinRate=0.0%
+DEBUG: T=40 Day 0 2024-09-02 00:00:00 Holdings: 10
+DEBUG: T=40 Day 40 2024-11-06 00:00:00 Holdings: 10
+DEBUG: T=40 Day 80 2025-01-02 00:00:00 Holdings: 10
+DEBUG: T=40 Day 120 2025-03-07 00:00:00 Holdings: 10
+DEBUG: T=40 Day 160 2025-05-08 00:00:00 Holdings: 10
+DEBUG: T=40 Day 200 2025-07-04 00:00:00 Holdings: 10
+DEBUG: T=40 Day 240 2025-10-27 00:00:00 Holdings: 10
+DEBUG: T=40 Day 280 2025-12-22 00:00:00 Holdings: 10
+  T=40: Return=  0.00%, MaxDD=  0.00%, WinRate=0.0%
+
+=== RANKING RESULTS ===
+ Period  Return  MaxDD  WinRate
+      5     0.0    0.0      0.0
+     10     0.0    0.0      0.0
+     14     0.0    0.0      0.0
+     20     0.0    0.0      0.0
+     25     0.0    0.0      0.0
+     30     0.0    0.0      0.0
+     40     0.0    0.0      0.0
+
+Analysis saved to D:\antigravity\etf\output\data\best_holding_period_analysis.csv
