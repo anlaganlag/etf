@@ -1,6 +1,4 @@
-Starting Multi-Timeframe Comparison: 5P vs 8P
-------------------------------------------------------------
->>> Running 3M | 5p...
+TF | STRAT_PNL | BM_PNL | ALPHA | MDD | SHARP
 ----------------------------------------
 
 python sdk version: 3.0.180
@@ -16,8 +14,7 @@ c sdk version: 3.8.13
 2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
 3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
 
-FINAL_RESULT|3M|5p|15.49|6.50|2.55
->>> Running 3M | 8p...
+RESULT|1M|STRAT:3.15|BM:4.51|ALPHA:-1.36|MDD:10.61|SHARP:1.02
 ----------------------------------------
 
 python sdk version: 3.0.180
@@ -33,8 +30,7 @@ c sdk version: 3.8.13
 2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
 3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
 
-FINAL_RESULT|3M|8p|15.38|6.51|2.53
->>> Running 6M | 5p...
+RESULT|2M|STRAT:42.67|BM:14.35|ALPHA:28.31|MDD:9.82|SHARP:4.02
 ----------------------------------------
 
 python sdk version: 3.0.180
@@ -50,8 +46,7 @@ c sdk version: 3.8.13
 2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
 3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
 
-FINAL_RESULT|6M|5p|50.76|10.98|3.18
->>> Running 6M | 8p...
+RESULT|3M|STRAT:-2.80|BM:9.38|ALPHA:-12.18|MDD:12.34|SHARP:-0.41
 ----------------------------------------
 
 python sdk version: 3.0.180
@@ -67,8 +62,7 @@ c sdk version: 3.8.13
 2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
 3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
 
-FINAL_RESULT|6M|8p|47.46|10.94|2.99
->>> Running 12M | 5p...
+RESULT|6M|STRAT:36.39|BM:44.96|ALPHA:-8.57|MDD:15.57|SHARP:1.88
 ----------------------------------------
 
 python sdk version: 3.0.180
@@ -84,8 +78,7 @@ c sdk version: 3.8.13
 2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
 3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
 
-FINAL_RESULT|12M|5p|60.52|12.25|1.99
->>> Running 12M | 8p...
+RESULT|12M|STRAT:59.94|BM:60.01|ALPHA:-0.07|MDD:23.52|SHARP:1.42
 ----------------------------------------
 
 python sdk version: 3.0.180
@@ -101,38 +94,4 @@ c sdk version: 3.8.13
 2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
 3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
 
-FINAL_RESULT|12M|8p|59.59|16.92|1.89
->>> Running Full | 5p...
-----------------------------------------
-
-python sdk version: 3.0.180
-
-c sdk version: 3.8.13
-
-----------------------------------------
-
-回测开始，正下载数据到本地...
-
-提示：
-1. 如果请求数据量较大，首次准备数据可能需要较长时间，请耐心等待。
-2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
-3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
-
-FINAL_RESULT|Full|5p|107.63|12.71|1.88
->>> Running Full | 8p...
-----------------------------------------
-
-python sdk version: 3.0.180
-
-c sdk version: 3.8.13
-
-----------------------------------------
-
-回测开始，正下载数据到本地...
-
-提示：
-1. 如果请求数据量较大，首次准备数据可能需要较长时间，请耐心等待。
-2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
-3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
-
-FINAL_RESULT|Full|8p|107.51|13.07|2.02
+RESULT|Full|STRAT:192.94|BM:117.93|ALPHA:75.01|MDD:14.94|SHARP:2.48
