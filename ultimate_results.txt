@@ -1,0 +1,206 @@
+Starting Comprehensive Period Comparison (Short vs Medium vs Long)
+---------------------------------------------------------------------------
+>>> Running 12M | 5P_PureShort...
+----------------------------------------
+
+python sdk version: 3.0.180
+
+c sdk version: 3.8.13
+
+----------------------------------------
+
+回测开始，正下载数据到本地...
+
+提示：
+1. 如果请求数据量较大，首次准备数据可能需要较长时间，请耐心等待。
+2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
+3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
+
+ULTIMATE_COMPARE|12M|5P_PureShort|37.23|19.05|1.34
+>>> Running 12M | Hybrid_Medium...
+----------------------------------------
+
+python sdk version: 3.0.180
+
+c sdk version: 3.8.13
+
+----------------------------------------
+
+回测开始，正下载数据到本地...
+
+提示：
+1. 如果请求数据量较大，首次准备数据可能需要较长时间，请耐心等待。
+2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
+3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
+
+ULTIMATE_COMPARE|12M|Hybrid_Medium|37.64|19.61|1.33
+>>> Running 12M | Inst_Long...
+----------------------------------------
+
+python sdk version: 3.0.180
+
+c sdk version: 3.8.13
+
+----------------------------------------
+
+回测开始，正下载数据到本地...
+
+提示：
+1. 如果请求数据量较大，首次准备数据可能需要较长时间，请耐心等待。
+2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
+3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
+
+ULTIMATE_COMPARE|12M|Inst_Long|24.03|16.76|0.93
+>>> Running 6M | 5P_PureShort...
+----------------------------------------
+
+python sdk version: 3.0.180
+
+c sdk version: 3.8.13
+
+----------------------------------------
+
+回测开始，正下载数据到本地...
+
+提示：
+1. 如果请求数据量较大，首次准备数据可能需要较长时间，请耐心等待。
+2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
+3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
+
+ULTIMATE_COMPARE|6M|5P_PureShort|53.68|7.23|3.33
+>>> Running 6M | Hybrid_Medium...
+----------------------------------------
+
+python sdk version: 3.0.180
+
+c sdk version: 3.8.13
+
+----------------------------------------
+
+回测开始，正下载数据到本地...
+
+提示：
+1. 如果请求数据量较大，首次准备数据可能需要较长时间，请耐心等待。
+2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
+3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
+
+ULTIMATE_COMPARE|6M|Hybrid_Medium|50.11|8.76|3.27
+>>> Running 6M | Inst_Long...
+----------------------------------------
+
+python sdk version: 3.0.180
+
+c sdk version: 3.8.13
+
+----------------------------------------
+
+回测开始，正下载数据到本地...
+
+提示：
+1. 如果请求数据量较大，首次准备数据可能需要较长时间，请耐心等待。
+2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
+3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
+
+ULTIMATE_COMPARE|6M|Inst_Long|30.60|11.32|2.21
+>>> Running 3M | 5P_PureShort...
+----------------------------------------
+
+python sdk version: 3.0.180
+
+c sdk version: 3.8.13
+
+----------------------------------------
+
+回测开始，正下载数据到本地...
+
+提示：
+1. 如果请求数据量较大，首次准备数据可能需要较长时间，请耐心等待。
+2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
+3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
+
+ULTIMATE_COMPARE|3M|5P_PureShort|17.43|7.53|2.60
+>>> Running 3M | Hybrid_Medium...
+----------------------------------------
+
+python sdk version: 3.0.180
+
+c sdk version: 3.8.13
+
+----------------------------------------
+
+回测开始，正下载数据到本地...
+
+提示：
+1. 如果请求数据量较大，首次准备数据可能需要较长时间，请耐心等待。
+2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
+3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
+
+ULTIMATE_COMPARE|3M|Hybrid_Medium|16.39|10.59|2.56
+>>> Running 3M | Inst_Long...
+----------------------------------------
+
+python sdk version: 3.0.180
+
+c sdk version: 3.8.13
+
+----------------------------------------
+
+回测开始，正下载数据到本地...
+
+提示：
+1. 如果请求数据量较大，首次准备数据可能需要较长时间，请耐心等待。
+2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
+3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
+
+ULTIMATE_COMPARE|3M|Inst_Long|4.19|11.54|0.75
+>>> Running 2M | 5P_PureShort...
+----------------------------------------
+
+python sdk version: 3.0.180
+
+c sdk version: 3.8.13
+
+----------------------------------------
+
+回测开始，正下载数据到本地...
+
+提示：
+1. 如果请求数据量较大，首次准备数据可能需要较长时间，请耐心等待。
+2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
+3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
+
+ULTIMATE_COMPARE|2M|5P_PureShort|26.96|7.20|4.69
+>>> Running 2M | Hybrid_Medium...
+----------------------------------------
+
+python sdk version: 3.0.180
+
+c sdk version: 3.8.13
+
+----------------------------------------
+
+回测开始，正下载数据到本地...
+
+提示：
+1. 如果请求数据量较大，首次准备数据可能需要较长时间，请耐心等待。
+2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
+3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
+
+ULTIMATE_COMPARE|2M|Hybrid_Medium|22.55|4.96|4.62
+>>> Running 2M | Inst_Long...
+----------------------------------------
+
+python sdk version: 3.0.180
+
+c sdk version: 3.8.13
+
+----------------------------------------
+
+回测开始，正下载数据到本地...
+
+提示：
+1. 如果请求数据量较大，首次准备数据可能需要较长时间，请耐心等待。
+2. 可预先下载数据以加速回测，功能入口：掘金终端->量化研究->数据管理
+3. 相关指引：https://www.myquant.cn/docs2/operatingInstruction/study/数据管理.html
+
+ULTIMATE_COMPARE|2M|Inst_Long|17.02|5.35|3.74
