@@ -16,8 +16,8 @@ load_dotenv()
 def init(context):
     # 1. Strategy Parameters (v6.0 Theme Boost)
     context.T = 14                  
-    context.top_n = 3          # Top 3 (Aggressive) = ~195% Return. Set to 10 for Standard (~112%)
-    context.min_score = 20        
+    context.top_n = 2          # Top 3 (Aggressive) = ~195% Return. Set to 10 for Standard (~112%)
+    context.min_score = 150        
     context.target_percent = 0.98   
     context.days_count = 0
     
@@ -238,10 +238,10 @@ def on_backtest_finished(context, indicator):
 
 if __name__ == '__main__':
     run(strategy_id='fe474f75-fa8e-11f0-b097-00ffda9d6e63', 
-        filename='gm_backtest.py',
+        filename='gm_backtest_temp.py',
         mode=MODE_BACKTEST,
         token=os.getenv('MY_QUANT_TGM_TOKEN'),
-        backtest_start_time='2021-11-26 09:00:00',
+        backtest_start_time='2024-09-01 09:00:00',
         backtest_end_time='2026-01-27 16:00:00',
         backtest_adjust=ADJUST_PREV,
         backtest_initial_cash=1000000,
