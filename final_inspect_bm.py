@@ -149,7 +149,7 @@ def on_backtest_finished(context, indicator):
 
 if __name__ == '__main__':
     token = os.getenv('MY_QUANT_TGM_TOKEN')
-    tfs = {'1M': '2025-12-23', '2M': '2025-11-23', '3M': '2025-10-23', '6M': '2025-07-23', '12M': '2025-01-23', 'Full': '2024-09-01'}
+    tfs = {'Full': '2024-01-01'}
     print("TF | STRAT_PNL | BM_PNL | ALPHA | MDD | SHARP")
     for tf_name, start in tfs.items():
         os.environ['TF'] = tf_name

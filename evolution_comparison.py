@@ -15,8 +15,8 @@ load_dotenv()
 # THE EVOLUTIONARY STAGES
 STAGES = {
     'V1_Original': {
-        'desc': 'Initial Start (5P, No Guard, No Threshold, Equal Weight)',
-        'periods': {1: 100, 3: 70, 5: 50, 10: 30, 20: 20},
+        'desc': 'Initial Start (8P, No Guard, No Threshold, Equal Weight)',
+        'periods': {1: 100, 3: 70, 5: 50, 10: 30, 20: 20, 60: 15, 120: 10, 250: 5},
         'min_score': 0,
         'guarded': False,
         'fruits': False,
@@ -159,7 +159,7 @@ def on_bar(context, bars):
                     target_dict = {c: 1.0/len(selected) for c, s in selected}
 
         # Simplified Timing
-        strong_market_count = (scores[scores.index.isin(context.whitelist)] >= 150).sum()
+        strong_market_count = (scores >= 150).sum()
         exposure = 0.3 if (strong_market_count < 5 and context.cfg['graded']) else 1.0
 
         curr_pos = [p['symbol'] for p in context.account().positions() if p['amount'] > 0]
@@ -173,7 +173,7 @@ def on_bar(context, bars):
     else:
         # Fruit 1 Filling
         if context.cfg['fruits'] and current_holding_count < context.top_n and not valid_final.empty:
-            strong_market_count = (scores[scores.index.isin(context.whitelist)] >= 150).sum()
+            strong_market_count = (scores >= 150).sum()
             if strong_market_count >= 5:
                 held_symbols = [p['symbol'] for p in context.account().positions() if p['amount'] > 0]
                 held_themes = {context.theme_map.get(s, 'Unknown') for s in held_symbols}
