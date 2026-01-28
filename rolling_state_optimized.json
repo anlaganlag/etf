@@ -1,0 +1,359 @@
+{
+  "params": {
+    "T": 10,
+    "top_n": 5
+  },
+  "initialized": true,
+  "tranches": [
+    {
+      "id": 0,
+      "cash": 691.5999999999513,
+      "holdings": {
+        "SHSE.510050": 6400,
+        "SHSE.510210": 19500,
+        "SHSE.510300": 4200,
+        "SHSE.510500": 2400,
+        "SHSE.510720": 20900
+      },
+      "pos_records": {
+        "SHSE.510050": {
+          "entry_price": 3.15,
+          "high_price": 3.15
+        },
+        "SHSE.510210": {
+          "entry_price": 1.031,
+          "high_price": 1.033
+        },
+        "SHSE.510300": {
+          "entry_price": 4.724,
+          "high_price": 4.73
+        },
+        "SHSE.510500": {
+          "entry_price": 8.324,
+          "high_price": 8.469
+        },
+        "SHSE.510720": {
+          "entry_price": 0.961,
+          "high_price": 0.963
+        }
+      },
+      "total_value": 101179.19999999994,
+      "guard_triggered_today": false
+    },
+    {
+      "id": 1,
+      "cash": 552.8999999999542,
+      "holdings": {
+        "SHSE.510050": 6500,
+        "SHSE.510210": 19800,
+        "SHSE.510300": 4300,
+        "SHSE.510500": 2400,
+        "SHSE.510720": 21400
+      },
+      "pos_records": {
+        "SHSE.510050": {
+          "entry_price": 3.145,
+          "high_price": 3.145
+        },
+        "SHSE.510210": {
+          "entry_price": 1.03,
+          "high_price": 1.033
+        },
+        "SHSE.510300": {
+          "entry_price": 4.73,
+          "high_price": 4.73
+        },
+        "SHSE.510500": {
+          "entry_price": 8.432,
+          "high_price": 8.469
+        },
+        "SHSE.510720": {
+          "entry_price": 0.955,
+          "high_price": 0.963
+        }
+      },
+      "total_value": 102617.69999999994,
+      "guard_triggered_today": false
+    },
+    {
+      "id": 2,
+      "cash": 239.50000000006912,
+      "holdings": {
+        "SHSE.510050": 6500,
+        "SHSE.510210": 19700,
+        "SHSE.510300": 4300,
+        "SHSE.510500": 2400,
+        "SHSE.510720": 21100
+      },
+      "pos_records": {
+        "SHSE.510050": {
+          "entry_price": 3.131,
+          "high_price": 3.131
+        },
+        "SHSE.510210": {
+          "entry_price": 1.033,
+          "high_price": 1.033
+        },
+        "SHSE.510300": {
+          "entry_price": 4.727,
+          "high_price": 4.727
+        },
+        "SHSE.510500": {
+          "entry_price": 8.469,
+          "high_price": 8.469
+        },
+        "SHSE.510720": {
+          "entry_price": 0.963,
+          "high_price": 0.963
+        }
+      },
+      "total_value": 101912.10000000008,
+      "guard_triggered_today": false
+    },
+    {
+      "id": 3,
+      "cash": 1079.7999999999447,
+      "holdings": {
+        "SHSE.510050": 6300,
+        "SHSE.510210": 19100,
+        "SHSE.510300": 4100,
+        "SHSE.510500": 2300,
+        "SHSE.510720": 20500
+      },
+      "pos_records": {
+        "SHSE.510050": {
+          "entry_price": 3.131,
+          "high_price": 3.131
+        },
+        "SHSE.510210": {
+          "entry_price": 1.033,
+          "high_price": 1.033
+        },
+        "SHSE.510300": {
+          "entry_price": 4.727,
+          "high_price": 4.727
+        },
+        "SHSE.510500": {
+          "entry_price": 8.469,
+          "high_price": 8.469
+        },
+        "SHSE.510720": {
+          "entry_price": 0.963,
+          "high_price": 0.963
+        }
+      },
+      "total_value": 99136.29999999994,
+      "guard_triggered_today": false
+    },
+    {
+      "id": 4,
+      "cash": 1079.9999999998363,
+      "holdings": {
+        "SHSE.510050": 6200,
+        "SHSE.510210": 19000,
+        "SHSE.510300": 4100,
+        "SHSE.510500": 2300,
+        "SHSE.510720": 20400
+      },
+      "pos_records": {
+        "SHSE.510050": {
+          "entry_price": 3.131,
+          "high_price": 3.131
+        },
+        "SHSE.510210": {
+          "entry_price": 1.033,
+          "high_price": 1.033
+        },
+        "SHSE.510300": {
+          "entry_price": 4.727,
+          "high_price": 4.727
+        },
+        "SHSE.510500": {
+          "entry_price": 8.469,
+          "high_price": 8.469
+        },
+        "SHSE.510720": {
+          "entry_price": 0.963,
+          "high_price": 0.963
+        }
+      },
+      "total_value": 98623.79999999983,
+      "guard_triggered_today": false
+    },
+    {
+      "id": 5,
+      "cash": 1537.100000000035,
+      "holdings": {
+        "SHSE.510050": 6100,
+        "SHSE.510210": 19300,
+        "SHSE.510300": 4000,
+        "SHSE.510500": 2300,
+        "SHSE.510720": 20400
+      },
+      "pos_records": {
+        "SHSE.510050": {
+          "entry_price": 3.214,
+          "high_price": 3.214
+        },
+        "SHSE.510210": {
+          "entry_price": 1.032,
+          "high_price": 1.033
+        },
+        "SHSE.510300": {
+          "entry_price": 4.896,
+          "high_price": 4.896
+        },
+        "SHSE.510500": {
+          "entry_price": 8.306,
+          "high_price": 8.469
+        },
+        "SHSE.510720": {
+          "entry_price": 0.973,
+          "high_price": 0.973
+        }
+      },
+      "total_value": 98605.00000000003,
+      "guard_triggered_today": false
+    },
+    {
+      "id": 6,
+      "cash": 885.4000000000851,
+      "holdings": {
+        "SHSE.510050": 6100,
+        "SHSE.510210": 19000,
+        "SHSE.510300": 4000,
+        "SHSE.510500": 2300,
+        "SHSE.510720": 20300
+      },
+      "pos_records": {
+        "SHSE.510050": {
+          "entry_price": 3.187,
+          "high_price": 3.187
+        },
+        "SHSE.510210": {
+          "entry_price": 1.029,
+          "high_price": 1.033
+        },
+        "SHSE.510300": {
+          "entry_price": 4.866,
+          "high_price": 4.875
+        },
+        "SHSE.510500": {
+          "entry_price": 8.365,
+          "high_price": 8.469
+        },
+        "SHSE.510720": {
+          "entry_price": 0.966,
+          "high_price": 0.966
+        }
+      },
+      "total_value": 97547.10000000008,
+      "guard_triggered_today": false
+    },
+    {
+      "id": 7,
+      "cash": 1004.5000000000691,
+      "holdings": {
+        "SHSE.510050": 6100,
+        "SHSE.510210": 18900,
+        "SHSE.510300": 3900,
+        "SHSE.510500": 2300,
+        "SHSE.510720": 20200
+      },
+      "pos_records": {
+        "SHSE.510050": {
+          "entry_price": 3.18,
+          "high_price": 3.18
+        },
+        "SHSE.510210": {
+          "entry_price": 1.028,
+          "high_price": 1.033
+        },
+        "SHSE.510300": {
+          "entry_price": 4.875,
+          "high_price": 4.875
+        },
+        "SHSE.510500": {
+          "entry_price": 8.339,
+          "high_price": 8.469
+        },
+        "SHSE.510720": {
+          "entry_price": 0.96,
+          "high_price": 0.963
+        }
+      },
+      "total_value": 96993.90000000005,
+      "guard_triggered_today": false
+    },
+    {
+      "id": 8,
+      "cash": 811.5000000000073,
+      "holdings": {
+        "SHSE.510050": 6300,
+        "SHSE.510210": 19600,
+        "SHSE.510300": 4100,
+        "SHSE.510500": 2400,
+        "SHSE.510720": 21200
+      },
+      "pos_records": {
+        "SHSE.510050": {
+          "entry_price": 3.16,
+          "high_price": 3.16
+        },
+        "SHSE.510210": {
+          "entry_price": 1.023,
+          "high_price": 1.033
+        },
+        "SHSE.510300": {
+          "entry_price": 4.859,
+          "high_price": 4.859
+        },
+        "SHSE.510500": {
+          "entry_price": 8.295,
+          "high_price": 8.469
+        },
+        "SHSE.510720": {
+          "entry_price": 0.95,
+          "high_price": 0.963
+        }
+      },
+      "total_value": 100905.5,
+      "guard_triggered_today": false
+    },
+    {
+      "id": 9,
+      "cash": 817.6999999999134,
+      "holdings": {
+        "SHSE.510050": 6200,
+        "SHSE.510210": 19000,
+        "SHSE.510300": 4100,
+        "SHSE.510500": 2300,
+        "SHSE.510720": 20600
+      },
+      "pos_records": {
+        "SHSE.510050": {
+          "entry_price": 3.153,
+          "high_price": 3.153
+        },
+        "SHSE.510210": {
+          "entry_price": 1.028,
+          "high_price": 1.033
+        },
+        "SHSE.510300": {
+          "entry_price": 4.738,
+          "high_price": 4.738
+        },
+        "SHSE.510500": {
+          "entry_price": 8.348,
+          "high_price": 8.469
+        },
+        "SHSE.510720": {
+          "entry_price": 0.952,
+          "high_price": 0.963
+        }
+      },
+      "total_value": 98554.0999999999,
+      "guard_triggered_today": false
+    }
+  ]
+}

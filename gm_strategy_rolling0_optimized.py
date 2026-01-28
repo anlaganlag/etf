@@ -10,15 +10,15 @@ from config import config
 
 load_dotenv()
 
-# --- Simplified Rolling Strategy Config ---
+# --- Optimized Rolling Strategy Config ---
 TOP_N = 5
-STOP_LOSS = 0.12  # 收紧止损
-TRAILING_TRIGGER = 0.05  # 保守版本配置
+STOP_LOSS = 0.15  # 降低到15%
+TRAILING_TRIGGER = 0.05  # 降低到5%就开始追踪
 TRAILING_DROP = 0.05
-MIN_SCORE = 20
-REBALANCE_PERIOD_T = 10  # 测试主题限制影响
-STATE_FILE = "rolling_state_simple.json"
-
+MIN_SCORE = 0  # 改用连续分数，不需要最小分
+REBALANCE_PERIOD_T = 10  # 从14降到10，提高换手
+STATE_FILE = "rolling_state_optimized.json"
+ALLOW_SAME_THEME = True  # 允许相同主题
 
 START_DATE='2021-12-03 09:00:00'
 END_DATE='2026-01-23 16:00:00'
@@ -27,10 +27,10 @@ class Tranche:
     def __init__(self, t_id, initial_cash=0):
         self.id = t_id
         self.cash = initial_cash
-        self.holdings = {} # {symbol: shares}
-        self.pos_records = {} # {symbol: {'entry_price': x, 'high_price': y}}
+        self.holdings = {}
+        self.pos_records = {}
         self.total_value = initial_cash
-        self.guard_triggered_today = False 
+        self.guard_triggered_today = False
 
     def to_dict(self):
         return self.__dict__
@@ -41,7 +41,6 @@ class Tranche:
         t.holdings = d["holdings"]
         t.pos_records = d["pos_records"]
         t.total_value = d["total_value"]
-        # guard_triggered_today doesn't need persistence, resets daily
         return t
 
     def update_value(self, price_map):
@@ -64,8 +63,8 @@ class Tranche:
             if curr_price <= 0: continue
 
             entry, high = rec['entry_price'], rec['high_price']
-            
-            # Stop Loss OR Trailing Take Profit
+
+            # Optimized Stop Loss OR Trailing Take Profit
             if (curr_price < entry * (1 - STOP_LOSS)) or \
                (high > entry * (1 + TRAILING_TRIGGER) and curr_price < high * (1 - TRAILING_DROP)):
                 to_sell.append(sym)
@@ -81,7 +80,7 @@ class Tranche:
             if symbol in self.pos_records: del self.pos_records[symbol]
 
     def buy(self, symbol, cash_allocated, price):
-        if price <= 0: return
+        if pd.isna(price) or price <= 0: return
         shares = int(cash_allocated / price / 100) * 100
         cost = shares * price
         if shares > 0 and self.cash >= cost:
@@ -95,7 +94,7 @@ class RollingPortfolioManager:
         self.params = {"T": REBALANCE_PERIOD_T, "top_n": TOP_N}
         self.initialized = False
         self.state_path = os.path.join(config.BASE_DIR, STATE_FILE)
-        
+
     def load_state(self):
         if os.path.exists(self.state_path):
             try:
@@ -109,7 +108,7 @@ class RollingPortfolioManager:
             except Exception as e:
                 print(f"Failed to load state: {e}")
         return False
-        
+
     def save_state(self):
         data = {
             "params": self.params,
@@ -128,9 +127,9 @@ class RollingPortfolioManager:
         self.save_state()
 
 def init(context):
-    print(f"Initializing Simple Strategy (T={REBALANCE_PERIOD_T}, TopN={TOP_N})")
+    print(f"Initializing Optimized Strategy (T={REBALANCE_PERIOD_T}, TopN={TOP_N})")
     context.rpm = RollingPortfolioManager()
-    
+
     # 1. Load Whitelist & Theme Map
     excel_path = os.path.join(config.BASE_DIR, "ETF合并筛选结果.xlsx")
     df_excel = pd.read_excel(excel_path)
@@ -141,7 +140,7 @@ def init(context):
     context.whitelist = set(df_excel['etf_code'])
     context.theme_map = df_excel.set_index('etf_code')['theme'].to_dict()
 
-    # 2. Build Price Matrix (Cache)
+    # 2. Build Price Matrix
     price_data = {}
     files = [f for f in os.listdir(config.DATA_CACHE_DIR) if f.endswith('.csv') and (f.startswith('sh') or f.startswith('sz'))]
     for f in files:
@@ -157,7 +156,7 @@ def init(context):
     print(f"Data Loaded: {context.prices_df.shape[1]} symbols.")
 
     # 3. State Management
-    if context.mode == MODE_BACKTEST and os.path.exists(context.rpm.state_path): 
+    if context.mode == MODE_BACKTEST and os.path.exists(context.rpm.state_path):
         os.remove(context.rpm.state_path)
     else:
         context.rpm.load_state()
@@ -165,80 +164,64 @@ def init(context):
     context.days_count = 0
     subscribe(symbols='SZSE.399006', frequency='1d')
 
-def get_market_regime(history):
-    """判断市场环境：返回仓位系数 0.5-1.0"""
-    if len(history) < 60: return 1.0
-
-    # 使用沪深300或创业板指数（假设在prices_df中）
-    # 这里用全市场平均代替
-    recent = history.tail(60)
-    ma20 = recent.tail(20).mean()
-    ma60 = recent.mean()
-    current = recent.iloc[-1]
-
-    # 计算市场强度
-    above_ma20 = (current > ma20).sum() / len(current)
-    above_ma60 = (current > ma60).sum() / len(current)
-
-    strength = (above_ma20 + above_ma60) / 2
-
-    # 根据市场强度调整仓位
-    if strength > 0.6: return 1.0      # 强势市场：满仓
-    elif strength > 0.4: return 0.8    # 震荡市场：80%
-    else: return 0.6                   # 弱势市场：60%
-
 def get_ranking(context, current_dt):
-    # V6 Score Logic
+    """
+    Optimized Scoring: Weighted Momentum + Volatility Adjusted
+    """
     history = context.prices_df[context.prices_df.index <= current_dt]
-    if len(history) < 251: return None, None
+    if len(history) < 251: return None
 
-    base_scores = pd.Series(0.0, index=history.columns)
-    periods_rule = {1: 20, 3: 30, 5: 50, 10: 70, 20: 100}  # 反转权重：长期优先
-    
-    # Calculate returns for all periods
-    # Note: rets_dict will store the raw returns for sorting tie-breaking
-    rets_dict = {}
     last_row = history.iloc[-1]
-    
-    for p, pts in periods_rule.items():
-        # r_p = (current / t-p) - 1
-        rets = (last_row / history.iloc[-(p+1)]) - 1
-        rets_dict[f'r{p}'] = rets
-        
-        ranks = rets.rank(ascending=False, method='min')
-        base_scores += (ranks <= 15) * pts
-    
-    # Filter
-    valid_scores = base_scores[base_scores.index.isin(context.whitelist)]
-    valid_scores = valid_scores[valid_scores >= MIN_SCORE]
-    
-    if valid_scores.empty: return None, base_scores
 
-    # Construct DataFrame with all return metrics for sorting
-    data_to_df = {
-        'score': valid_scores, 
-        'theme': [context.theme_map.get(c, 'Unknown') for c in valid_scores.index],
-        'etf_code': valid_scores.index # For final deterministic tie-breaking
-    }
-    
-    # Add returns to DataFrame data dict
-    for p in periods_rule.keys():
-        # Align rets to valid_scores index
-        data_to_df[f'r{p}'] = rets_dict[f'r{p}'][valid_scores.index]
+    # Calculate returns for different periods
+    r1 = (last_row / history.iloc[-2]) - 1
+    r3 = (last_row / history.iloc[-4]) - 1 if len(history) >= 4 else 0
+    r5 = (last_row / history.iloc[-6]) - 1 if len(history) >= 6 else 0
+    r10 = (last_row / history.iloc[-11]) - 1 if len(history) >= 11 else 0
+    r20 = (last_row / history.iloc[-21]) - 1 if len(history) >= 21 else 0
 
-    df = pd.DataFrame(data_to_df)
-    
-    # Sort by: Score -> r1 -> r3 -> r5 -> r10 -> r20 -> Code
-    # All returns Descending, Code Ascending
-    sort_cols = ['score', 'r1', 'r3', 'r5', 'r10', 'r20', 'etf_code']
-    asc_order = [False, False, False, False, False, False, True]
-    
-    return df.sort_values(by=sort_cols, ascending=asc_order), base_scores
+    # Optimized Weighting: Reduce short-term weight, increase medium-term
+    # 更平衡的权重分配：降低超短期权重，提高中期趋势权重
+    momentum_score = (
+        r1 * 0.10 +    # 1日：10% (原来隐含约37%)
+        r3 * 0.15 +    # 3日：15% (原来隐含约26%)
+        r5 * 0.20 +    # 5日：20% (原来隐含约18%)
+        r10 * 0.25 +   # 10日：25% (原来隐含约11%)
+        r20 * 0.30     # 20日：30% (原来隐含约7%)
+    )
+
+    # Calculate 20-day volatility for risk adjustment
+    recent_20 = history.tail(20)
+    returns_20 = recent_20.pct_change().dropna()
+    volatility = returns_20.std()
+
+    # Risk-adjusted score: momentum / volatility (Sharpe-like)
+    risk_adj_score = momentum_score / (volatility + 0.001)  # Avoid division by zero
+
+    # Filter whitelist
+    valid_scores = risk_adj_score[risk_adj_score.index.isin(context.whitelist)]
+
+    if valid_scores.empty: return None
+
+    # Build DataFrame
+    df = pd.DataFrame({
+        'etf_code': valid_scores.index,
+        'score': valid_scores.values,
+        'momentum': momentum_score[valid_scores.index].values,
+        'volatility': volatility[valid_scores.index].values,
+        'r20': r20[valid_scores.index].values,
+        'theme': [context.theme_map.get(c, 'Unknown') for c in valid_scores.index]
+    })
+
+    # Sort by risk-adjusted score
+    df = df.sort_values('score', ascending=False)
+
+    return df
 
 def on_bar(context, bars):
     current_dt = context.now.replace(tzinfo=None)
     context.days_count += 1
-    
+
     # Init if needed
     if not context.rpm.initialized:
         cash = context.account().cash.available if hasattr(context.account().cash, 'available') else context.account().cash.nav
@@ -254,8 +237,8 @@ def on_bar(context, bars):
     price_map = today_prices.to_dict()
 
     # Rank
-    ranking_df, _ = get_ranking(context, current_dt)
-    
+    ranking_df = get_ranking(context, current_dt)
+
     # Update All Tranches (Value & Guard)
     for t in context.rpm.tranches:
         t.update_value(price_map)
@@ -267,24 +250,36 @@ def on_bar(context, bars):
         else:
             t.guard_triggered_today = False
 
-    # Rolling Rebalance (Buy/Sell)
+    # Rolling Rebalance
     active_tranche = context.rpm.tranches[(context.days_count - 1) % REBALANCE_PERIOD_T]
-    
+
     # 1. Sell Old
     for sym in list(active_tranche.holdings.keys()):
         price = price_map.get(sym, 0)
         if price > 0: active_tranche.sell(sym, price)
-    
-    # 2. Buy New (Risk Control: Don't buy if guard triggered today)
+
+    # 2. Buy New
     if ranking_df is not None and not active_tranche.guard_triggered_today:
-        targets = ranking_df.head(TOP_N).index.tolist()
+        if ALLOW_SAME_THEME:
+            # 直接选TOP N，不限制主题
+            targets = ranking_df.head(TOP_N)['etf_code'].tolist()
+        else:
+            # 原逻辑：不同主题
+            targets = []
+            seen = set()
+            for idx, row in ranking_df.iterrows():
+                code = row['etf_code']
+                if row['theme'] not in seen:
+                    targets.append(code)
+                    seen.add(row['theme'])
+                if len(targets) >= TOP_N: break
 
         if targets:
-            # 满仓运行（保守版本配置，目标58.8%收益）
+            # 按分数加权分配资金（可选：目前仍用平均分配）
             per_amt = active_tranche.cash / len(targets)
             for sym in targets:
                 active_tranche.buy(sym, per_amt, price_map.get(sym, 0))
-    
+
     active_tranche.update_value(price_map)
 
     # Sync to Broker
@@ -292,13 +287,13 @@ def on_bar(context, bars):
     for t in context.rpm.tranches:
         for sym, shares in t.holdings.items():
             global_tgt[sym] = global_tgt.get(sym, 0) + shares
-            
+
     real = {p['symbol']: p['amount'] for p in context.account().positions()}
-    
+
     for sym in real:
         if real[sym] > global_tgt.get(sym, 0):
             order_target_volume(symbol=sym, volume=global_tgt.get(sym, 0), order_type=OrderType_Market, position_side=PositionSide_Long)
-    
+
     for sym, tgt in global_tgt.items():
         if real.get(sym, 0) < tgt:
             order_target_volume(symbol=sym, volume=tgt, order_type=OrderType_Market, position_side=PositionSide_Long)
@@ -306,13 +301,14 @@ def on_bar(context, bars):
     context.rpm.save_state()
 
 def on_backtest_finished(context, indicator):
-    print(f"\n=== SIMPLE ROLLING (T={REBALANCE_PERIOD_T}) RESULTS ===")
+    print(f"\n=== OPTIMIZED ROLLING (T={REBALANCE_PERIOD_T}) RESULTS ===")
     print(f"Return: {indicator.get('pnl_ratio', 0)*100:.2f}%")
     print(f"Max DD: {indicator.get('max_drawdown', 0)*100:.2f}%")
-    print(f"Sharpe: {indicator.get('sharp_ratio', 0):.2f}\n")
-    print('hello world')
+    print(f"Sharpe: {indicator.get('sharp_ratio', 0):.2f}")
+    print(f"Win Rate: {indicator.get('win_rate', 0)*100:.2f}%")
+    print(f"Trade Count: {indicator.get('order_count', 0)}\n")
 
 if __name__ == '__main__':
-    run(strategy_id='d6d71d85-fb4c-11f0-99de-00ffda9d6e63', filename='gm_strategy_rolling0.py', mode=MODE_BACKTEST,
+    run(strategy_id='optimized_rolling_v1', filename='gm_strategy_rolling0_optimized.py', mode=MODE_BACKTEST,
         token=os.getenv('MY_QUANT_TGM_TOKEN'), backtest_start_time=START_DATE, backtest_end_time=END_DATE,
         backtest_adjust=ADJUST_PREV, backtest_initial_cash=1000000)

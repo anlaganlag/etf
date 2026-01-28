@@ -232,9 +232,14 @@ def init(context):
     context.days_count = 0
     subscribe(symbols='SZSE.399006', frequency='1d')
 
-def get_ranking(context, current_dt):
+def get_ranking(context, current_dt, prices_df_override=None):
     # Standard V6 Logic
-    history_prices = context.prices_df[context.prices_df.index <= current_dt]
+    if prices_df_override is not None:
+        prices = prices_df_override
+    else:
+        prices = context.prices_df
+        
+    history_prices = prices[prices.index <= current_dt]
     if len(history_prices) < 251: return None, None
 
     periods_rule = {1: 100, 3: 70, 5: 50, 10: 30, 20: 20}
