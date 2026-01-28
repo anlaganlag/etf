@@ -12,19 +12,25 @@ load_dotenv()
 
 # --- Simplified Rolling Strategy Config ---
 TOP_N = 5
-STOP_LOSS = 0.12  # 收紧止损
-TRAILING_TRIGGER = 0.05  # 保守版本配置
-TRAILING_DROP = 0.05
+STOP_LOSS = 0.10  # 收紧止损
+TRAILING_TRIGGER = 0.08  # 保守版本配置
+TRAILING_DROP = 0.03
 MIN_SCORE = 20
 REBALANCE_PERIOD_T = 12  # 最优配置
 STATE_FILE = "rolling_state_simple.json"
 
 # === 动态仓位控制开关 ===
-DYNAMIC_POSITION = False  # 强烈推荐启用（收益+2%, 回撤-9%, 夏普+27%）
+DYNAMIC_POSITION = True  # 强烈推荐启用（收益+2%, 回撤-9%, 夏普+27%）
 
 
 # === 评分机制开关 ===
 SCORING_METHOD = 'SMOOTH' # 'STEP': 原版硬截断(前15满分) | 'SMOOTH': 线性衰减(前30平滑)
+
+# === 主题集中度控制 ===
+MAX_PER_THEME = 1  # 同一主题最多入选几只（防止板块过度集中）设为0不限制
+
+# === 实盘数据更新 ===
+LIVE_DATA_UPDATE = True  # True=每日更新prices_df（实盘必开）| False=只用init数据（回测）
 
 START_DATE='2021-12-03 09:00:00'
 END_DATE='2026-01-23 16:00:00'
@@ -105,15 +111,16 @@ class RollingPortfolioManager:
     def load_state(self):
         if os.path.exists(self.state_path):
             try:
-                with open(self.state_path, 'r') as f:
+                with open(self.state_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.params = data.get("params", self.params)
                     self.initialized = data.get("initialized", False)
                     self.tranches = [Tranche.from_dict(d) for d in data.get("tranches", [])]
-                print(f"Loaded State: {len(self.tranches)} tranches.")
+                print(f"✓ Loaded State: {len(self.tranches)} tranches from {self.state_path}")
                 return True
             except Exception as e:
-                print(f"Failed to load state: {e}")
+                print(f"⚠️ Failed to load state: {e}")
+                print(f"   Will initialize fresh state...")
         return False
         
     def save_state(self):
@@ -122,8 +129,19 @@ class RollingPortfolioManager:
             "initialized": self.initialized,
             "tranches": [t.to_dict() for t in self.tranches]
         }
-        with open(self.state_path, 'w') as f:
-            json.dump(data, f, indent=2)
+        try:
+            # 使用临时文件写入，然后重命名（原子操作）
+            temp_path = self.state_path + '.tmp'
+            with open(temp_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+            # 原子替换
+            if os.path.exists(self.state_path):
+                os.remove(self.state_path)
+            os.rename(temp_path, self.state_path)
+        except Exception as e:
+            print(f"⚠️ Failed to save state: {e}")
+            print(f"   State path: {self.state_path}")
+            # 不抛出异常，允许策略继续运行
 
     def initialize_tranches(self, total_cash):
         if self.initialized and self.tranches: return
@@ -252,11 +270,27 @@ def get_ranking(context, current_dt):
 def on_bar(context, bars):
     current_dt = context.now.replace(tzinfo=None)
     context.days_count += 1
-    
+
     # Init if needed
     if not context.rpm.initialized:
         cash = context.account().cash.available if hasattr(context.account().cash, 'available') else context.account().cash.nav
         context.rpm.initialize_tranches(cash)
+
+    # === 实盘数据更新（极简实现）===
+    if LIVE_DATA_UPDATE and context.mode != MODE_BACKTEST:
+        # 每天只更新一次（检查日期变化）
+        if not hasattr(context, 'last_update_date') or context.last_update_date != current_dt.date():
+            try:
+                # 获取最新收盘价（使用掘金API）
+                latest_bar = bars  # 当前bar包含最新数据
+                # 将新数据追加到prices_df末尾
+                new_row = {sym: latest_bar.get(sym, {}).get('close', np.nan)
+                          for sym in context.prices_df.columns if sym in latest_bar}
+                if new_row:
+                    context.prices_df.loc[current_dt] = pd.Series(new_row)
+                    context.last_update_date = current_dt.date()
+            except Exception as e:
+                print(f"Live data update failed: {e}")
 
     # Get Prices
     if current_dt not in context.prices_df.index:
@@ -291,7 +325,19 @@ def on_bar(context, bars):
     
     # 2. Buy New (Risk Control: Don't buy if guard triggered today)
     if ranking_df is not None and not active_tranche.guard_triggered_today:
-        targets = ranking_df.head(TOP_N).index.tolist()
+        # === 主题集中度控制（极简实现）===
+        if MAX_PER_THEME > 0:
+            targets = []
+            theme_count = {}
+            for code, row in ranking_df.iterrows():
+                theme = row['theme']
+                if theme_count.get(theme, 0) < MAX_PER_THEME:
+                    targets.append(code)
+                    theme_count[theme] = theme_count.get(theme, 0) + 1
+                if len(targets) >= TOP_N:
+                    break
+        else:
+            targets = ranking_df.head(TOP_N).index.tolist()
 
         if targets:
             if DYNAMIC_POSITION:
