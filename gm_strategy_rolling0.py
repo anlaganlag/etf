@@ -20,8 +20,11 @@ REBALANCE_PERIOD_T = 12  # 最优配置
 STATE_FILE = "rolling_state_simple.json"
 
 # === 动态仓位控制开关 ===
-DYNAMIC_POSITION = True  # 强烈推荐启用（收益+2%, 回撤-9%, 夏普+27%）
+DYNAMIC_POSITION = False  # 强烈推荐启用（收益+2%, 回撤-9%, 夏普+27%）
 
+
+# === 评分机制开关 ===
+SCORING_METHOD = 'SMOOTH' # 'STEP': 原版硬截断(前15满分) | 'SMOOTH': 线性衰减(前30平滑)
 
 START_DATE='2021-12-03 09:00:00'
 END_DATE='2026-01-23 16:00:00'
@@ -131,7 +134,7 @@ class RollingPortfolioManager:
         self.save_state()
 
 def init(context):
-    print(f"Initializing Simple Strategy (T={REBALANCE_PERIOD_T}, TopN={TOP_N})")
+    print(f"Initializing Simple Strategy (T={REBALANCE_PERIOD_T}, TopN={TOP_N}, Mode={SCORING_METHOD})")
     context.rpm = RollingPortfolioManager()
     
     # 1. Load Whitelist & Theme Map
@@ -209,7 +212,15 @@ def get_ranking(context, current_dt):
         rets_dict[f'r{p}'] = rets
         
         ranks = rets.rank(ascending=False, method='min')
-        base_scores += (ranks <= 15) * pts
+        
+        if SCORING_METHOD == 'SMOOTH':
+             # 平滑评分：前30名线性得分 (第1名100%，第15名53%，第30名3%)
+             # 解决了第15名和第16名的断崖问题
+             decay = (30 - ranks) / 30
+             decay = decay.clip(lower=0)
+             base_scores += decay * pts
+        else: # 'STEP' 原版
+             base_scores += (ranks <= 15) * pts
     
     # Filter
     valid_scores = base_scores[base_scores.index.isin(context.whitelist)]
