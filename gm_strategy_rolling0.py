@@ -11,12 +11,13 @@ from config import config
 load_dotenv()
 
 # --- Simplified Rolling Strategy Config ---
-TOP_N = 5
-STOP_LOSS = 0.10  # 收紧止损
-TRAILING_TRIGGER = 0.08  # 保守版本配置
-TRAILING_DROP = 0.03
+TOP_N = 8
+STOP_LOSS = 0.05  # 收紧止损
+TRAILING_TRIGGER = 0.06  # 保守版本配置
+TRAILING_DROP = 0.02
 MIN_SCORE = 20
-REBALANCE_PERIOD_T = 12  # 最优配置
+REBALANCE_PERIOD_T = 10
+  # 最优配置
 STATE_FILE = "rolling_state_simple.json"
 
 # === 动态仓位控制开关 ===
@@ -32,8 +33,8 @@ MAX_PER_THEME = 1  # 同一主题最多入选几只（防止板块过度集中�
 # === 实盘数据更新 ===
 LIVE_DATA_UPDATE = True  # True=每日更新prices_df（实盘必开）| False=只用init数据（回测）
 
-START_DATE='2021-12-03 09:00:00'
-END_DATE='2026-01-23 16:00:00'
+START_DATE='2024-09-01 09:00:00'
+END_DATE='2026-01-27 16:00:00'
 
 class Tranche:
     def __init__(self, t_id, initial_cash=0):
@@ -168,10 +169,20 @@ def init(context):
     # 2. Build Price Matrix (Cache)
     price_data = {}
     files = [f for f in os.listdir(config.DATA_CACHE_DIR) if f.endswith('.csv') and (f.startswith('sh') or f.startswith('sz'))]
+    
+    # Pre-calculate necessary symbols
+    needed_symbols = context.whitelist.copy()
+    # Add indices if needed for market regime (optional, but good practice)
+    # needed_symbols.add('SHSE.000001') 
+    
     for f in files:
         code = f.replace('_', '.').replace('.csv', '')
         if '.' not in code:
             code = ('SHSE.' if code.startswith('sh') else 'SZSE.') + code[2:]
+            
+        if code not in needed_symbols:
+            continue
+            
         try:
             df = pd.read_csv(os.path.join(config.DATA_CACHE_DIR, f), usecols=['日期', '收盘'])
             df['日期'] = pd.to_datetime(df['日期']).dt.tz_localize(None)
