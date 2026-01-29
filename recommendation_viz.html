@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETF Recommendation Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #05070a;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --accent-gold: #ffcc00;
+            --accent-cyan: #00f2ff;
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: 'Outfit', 'Noto Sans SC', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            background-image: 
+                radial-gradient(circle at 20% 20%, rgba(0, 242, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(255, 204, 0, 0.05) 0%, transparent 40%);
+        }
+
+        .container {
+            width: 900px;
+            padding: 40px;
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 32px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 40px;
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 20px;
+        }
+
+        .title-group h1 {
+            margin: 0;
+            font-size: 32px;
+            font-weight: 700;
+            background: linear-gradient(to right, var(--accent-cyan), var(--accent-gold));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .title-group p {
+            margin: 5px 0 0 0;
+            color: var(--text-secondary);
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .meta-info {
+            text-align: right;
+        }
+
+        .meta-info .date {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .meta-info .strategy {
+            font-size: 12px;
+            background: rgba(0, 242, 255, 0.1);
+            color: var(--accent-cyan);
+            padding: 4px 12px;
+            border-radius: 100px;
+            display: inline-block;
+            margin-top: 8px;
+            border: 1px solid rgba(0, 242, 255, 0.2);
+        }
+
+        .recommendation-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .card {
+            display: flex;
+            align-items: center;
+            padding: 24px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            transform: translateX(10px);
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(0, 242, 255, 0.3);
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--accent-cyan);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .card:hover::before {
+            opacity: 1;
+        }
+
+        .card-rank {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            width: 60px;
+            opacity: 0.3;
+        }
+
+        .card-info {
+            flex-grow: 1;
+        }
+
+        .card-name {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .card-code {
+            font-family: 'Outfit';
+            color: var(--accent-cyan);
+            font-size: 14px;
+            font-weight: 600;
+            margin-right: 12px;
+        }
+
+        .card-theme {
+            font-size: 14px;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .card-score {
+            text-align: right;
+        }
+
+        .score-val {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent-gold);
+            display: block;
+        }
+
+        .score-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .footer {
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+
+        .footer-tag {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #10b981;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title-group">
+                <p>Quantitative Selection</p>
+                <h1>今日量化选股推荐</h1>
+            </div>
+            <div class="meta-info">
+                <div class="date">2026.01.29</div>
+                <div class="strategy">Rolling-0 Strategy (T=13, N=5)</div>
+            </div>
+        </div>
+
+        <div class="recommendation-list">
+            <div class="card">
+                <div class="card-rank">01</div>
+                <div class="card-info">
+                    <div class="card-name">永赢中证沪深港黄金产业股票ETF</div>
+                    <span class="card-code">517520.SH</span>
+                    <span class="card-theme">主题: 沪深港黄金股票</span>
+                </div>
+                <div class="card-score">
+                    <span class="score-val">270.0</span>
+                    <span class="score-label">综合得分</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-rank">02</div>
+                <div class="card-info">
+                    <div class="card-name">万家中证工业有色金属主题ETF</div>
+                    <span class="card-code">560860.SH</span>
+                    <span class="card-theme">主题: 工业有色金属</span>
+                </div>
+                <div class="card-score">
+                    <span class="score-val">270.0</span>
+                    <span class="score-label">综合得分</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-rank">03</div>
+                <div class="card-info">
+                    <div class="card-name">华夏中证细分有色金属产业主题ETF</div>
+                    <span class="card-code">516650.SH</span>
+                    <span class="card-theme">主题: 有色金属</span>
+                </div>
+                <div class="card-score">
+                    <span class="score-val">270.0</span>
+                    <span class="score-label">综合得分</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-rank">04</div>
+                <div class="card-info">
+                    <div class="card-name">南方中证申万有色金属ETF</div>
+                    <span class="card-code">512400.SH</span>
+                    <span class="card-theme">主题: 申万有色金属</span>
+                </div>
+                <div class="card-score">
+                    <span class="score-val">270.0</span>
+                    <span class="score-label">综合得分</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-rank">05</div>
+                <div class="card-info">
+                    <div class="card-name">嘉实中证稀有金属主题ETF</div>
+                    <span class="card-code">562800.SH</span>
+                    <span class="card-theme">主题: 稀有金属</span>
+                </div>
+                <div class="card-score">
+                    <span class="score-val">270.0</span>
+                    <span class="score-label">综合得分</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <div class="footer-tag">
+                <div class="status-dot"></div>
+                实时价格行情已同步
+            </div>
+            <div>Scored by Antigravity AI Engine v2.0</div>
+        </div>
+    </div>
+</body>
+</html>

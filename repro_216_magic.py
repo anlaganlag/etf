@@ -252,7 +252,7 @@ def get_ranking(context, current_dt):
     if len(history) < 251: return None, None
 
     base_scores = pd.Series(0.0, index=history.columns)
-    periods_rule = {1: 20, 3: 30, 5: 50, 10: 70, 20: 100}  # 反转权重：长期优先
+    periods_rule = {1: 100, 3: 70, 5: 50, 10: 30, 20: 20}  # 反转权重：长期优先
     
     # Calculate returns for all periods
     # Note: rets_dict will store the raw returns for sorting tie-breaking

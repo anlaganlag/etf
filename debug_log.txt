@@ -1,0 +1,46 @@
+DEBUG: Entering load_data
+DEBUG: Base Dir: D:\antigravity\127\etf
+DEBUG: Loaded whitelist with 82 items
+DEBUG: Found 1409 csv files in cache
+DEBUG: No price data loaded! Check cache directory or whitelist matching.
+DEBUG: Entering load_data
+DEBUG: Base Dir: D:\antigravity\127\etf
+DEBUG: Loaded whitelist with 82 items
+DEBUG: Sample whitelist items: ['SZSE.159595', 'SHSE.515000', 'SZSE.159667', 'SZSE.159732', 'SZSE.159625']
+DEBUG: Found 1409 csv files in cache
+DEBUG: Sample cache code: sh510010 from file sh510010.csv
+DEBUG: No price data loaded! Check cache directory or whitelist matching.
+DEBUG: Entering load_data
+DEBUG: Base Dir: D:\antigravity\127\etf
+DEBUG: Loaded whitelist with 82 items
+DEBUG: Sample whitelist items: ['SHSE.516160', 'SHSE.515650', 'SZSE.159930', 'SHSE.510050', 'SZSE.159790']
+DEBUG: Found 1409 csv files in cache
+DEBUG: Sample cache code: sh510010 from file sh510010.csv
+DEBUG: Entering load_data
+DEBUG: Base Dir: D:\antigravity\127\etf
+DEBUG: Loaded whitelist with 82 items
+DEBUG: Sample whitelist items: ['SHSE.515800', 'SZSE.159105', 'SZSE.159611', 'SHSE.512710', 'SZSE.159852']
+DEBUG: Found 1409 csv files in cache
+DEBUG: Sample cache code: sh510010 from file sh510010.csv
+DEBUG: Benchmark SHSE.000001 not found in prices_df
+DEBUG: Entering load_data
+DEBUG: Base Dir: D:\antigravity\127\etf
+DEBUG: Loaded whitelist with 82 items
+DEBUG: Sample whitelist items: ['SHSE.510300', 'SHSE.515050', 'SZSE.159259', 'SHSE.560280', 'SZSE.159790']
+DEBUG: Found 1409 csv files in cache
+DEBUG: Sample cache code: sh510010 from file sh510010.csv
+DEBUG: Benchmark SHSE.000001 not found in prices_df
+DEBUG: Entering load_data
+DEBUG: Base Dir: D:\antigravity\127\etf
+DEBUG: Loaded whitelist with 82 items
+DEBUG: Sample whitelist items: ['SHSE.516520', 'SHSE.510210', 'SZSE.159928', 'SHSE.516150', 'SHSE.512040']
+DEBUG: Found 1409 csv files in cache
+DEBUG: Sample cache code: sh510010 from file sh510010.csv
+DEBUG: Benchmark SHSE.000001 not found in prices_df
+DEBUG: Entering load_data
+DEBUG: Base Dir: D:\antigravity\127\etf
+DEBUG: Loaded whitelist with 82 items
+DEBUG: Sample whitelist items: ['SZSE.159599', 'SHSE.562500', 'SZSE.159766', 'SHSE.512890', 'SHSE.515210']
+DEBUG: Found 1409 csv files in cache
+DEBUG: Sample cache code: sh510010 from file sh510010.csv
+DEBUG: Benchmark SHSE.000001 not found in prices_df

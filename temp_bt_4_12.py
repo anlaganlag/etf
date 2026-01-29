@@ -11,8 +11,8 @@ from config import config
 load_dotenv()
 
 # --- 最优参数  ---
-TOP_N = 5
-REBALANCE_PERIOD_T = 13
+TOP_N = 4
+REBALANCE_PERIOD_T = 12
 STOP_LOSS = 0.05  # 止损
 TRAILING_TRIGGER = 0.06 # 止盈
 TRAILING_DROP = 0.02  # 止盈回落
@@ -21,8 +21,8 @@ TRAILING_DROP = 0.02  # 止盈回落
 
 
 # --- 原始参数  ---
-# TOP_N = 5
-# REBALANCE_PERIOD_T = 13
+# TOP_N = 4
+# REBALANCE_PERIOD_T = 12
 # STOP_LOSS = 0.20  # 止损
 # TRAILING_TRIGGER = 0.10 # 止盈
 # TRAILING_DROP = 0.05  # 止盈回落
