@@ -37,11 +37,11 @@ END_DATE='2026-01-23 16:00:00'
 
 
 # === 动态仓位控制开关 ===
-DYNAMIC_POSITION = False  # 强烈推荐启用（收益+2%, 回撤-9%, 夏普+27%）
+DYNAMIC_POSITION = True  # 强烈推荐启用（收益+2%, 回撤-9%, 夏普+27%）
 
 
 # === 评分机制开关 ===
-SCORING_METHOD = 'STEP' # 'STEP': 原版硬截断(前15满分) | 'SMOOTH': 线性衰减(前30平滑)
+SCORING_METHOD = 'SMOOTH' # 'STEP': 原版硬截断(前15满分) | 'SMOOTH': 线性衰减(前30平滑)
 
 # === 主题集中度控制 ===
 MAX_PER_THEME = 1  # 同一主题最多入选几只（防止板块过度集中）设为0不限制
@@ -252,7 +252,11 @@ def get_ranking(context, current_dt):
     if len(history) < 251: return None, None
 
     base_scores = pd.Series(0.0, index=history.columns)
-    periods_rule = {1: 20, 3: 30, 5: 50, 10: 70, 20: 100}  # 反转权重：长期优先
+    # periods_rule = {1: 20, 3: 30, 5: 50, 10: 70, 20: 100}  # 反转权重：长期优先
+
+    # 修改为激进版：
+    periods_rule = {1: 100, 3: 70, 5: 50, 10: 30, 20: 20}
+
     
     # Calculate returns for all periods
     # Note: rets_dict will store the raw returns for sorting tie-breaking
@@ -306,61 +310,48 @@ def on_bar(context, bars):
     current_dt = context.now.replace(tzinfo=None)
     context.days_count += 1
 
-    # Init if needed
+    # 1. Init if needed
     if not context.rpm.initialized:
         cash = context.account().cash.available if hasattr(context.account().cash, 'available') else context.account().cash.nav
         context.rpm.initialize_tranches(cash)
 
-    # === 实盘数据更新（极简实现）===
-    if LIVE_DATA_UPDATE and context.mode != MODE_BACKTEST:
-        # 每天只更新一次（检查日期变化）
-        if not hasattr(context, 'last_update_date') or context.last_update_date != current_dt.date():
-            try:
-                # 获取最新收盘价（使用掘金API）
-                latest_bar = bars  # 当前bar包含最新数据
-                # 将新数据追加到prices_df末尾
-                new_row = {sym: latest_bar.get(sym, {}).get('close', np.nan)
-                          for sym in context.prices_df.columns if sym in latest_bar}
-                if new_row:
-                    context.prices_df.loc[current_dt] = pd.Series(new_row)
-                    context.last_update_date = current_dt.date()
-            except Exception as e:
-                print(f"Live data update failed: {e}")
-
-    # Get Prices
-    if current_dt not in context.prices_df.index:
-        idx = context.prices_df.index.searchsorted(current_dt)
-        if idx >= len(context.prices_df): return
-        today_prices = context.prices_df.iloc[idx]
-    else:
-        today_prices = context.prices_df.loc[current_dt]
+    # 2. Get Prices (Fixed: use history slicing to avoid looking into the future)
+    # This ensures we only see data UP TO and INCLUDING 'today' (T day)
+    history_until_now = context.prices_df[context.prices_df.index <= current_dt]
+    if history_until_now.empty:
+        return
+    today_prices = history_until_now.iloc[-1]
     price_map = today_prices.to_dict()
 
-    # Rank
-    ranking_df, _ = get_ranking(context, current_dt)
-    
-    # Update All Tranches (Value & Guard)
+    # 3. Update All Tranches (Value & Guard Check)
+    # Using T-day closing prices for accounting
     for t in context.rpm.tranches:
         t.update_value(price_map)
         to_sell, _ = t.check_guard(price_map)
         if to_sell:
             t.guard_triggered_today = True
-            print(f"Tranche {t.id} Guard Sold: {to_sell}")
-            for sym in to_sell: t.sell(sym, price_map.get(sym, 0))
+            print(f"{current_dt} | Tranche {t.id} Guard Triggered: {to_sell}")
+            for sym in to_sell: 
+                t.sell(sym, price_map.get(sym, 0))
         else:
             t.guard_triggered_today = False
 
-    # Rolling Rebalance (Buy/Sell)
-    active_tranche = context.rpm.tranches[(context.days_count - 1) % REBALANCE_PERIOD_T]
+    # 4. Rolling Rebalance (Buy/Sell)
+    # Identify which tranche is rotating today
+    active_idx = (context.days_count - 1) % REBALANCE_PERIOD_T
+    active_tranche = context.rpm.tranches[active_idx]
     
-    # 1. Sell Old
+    # Sell Old Holdings in the active tranche
     for sym in list(active_tranche.holdings.keys()):
         price = price_map.get(sym, 0)
-        if price > 0: active_tranche.sell(sym, price)
+        if price > 0: 
+            active_tranche.sell(sym, price)
     
-    # 2. Buy New (Risk Control: Don't buy if guard triggered today)
+    # 5. Buy New Holdings (based on T-day ranking)
+    ranking_df, _ = get_ranking(context, current_dt)
+    
     if ranking_df is not None and not active_tranche.guard_triggered_today:
-        # === 主题集中度控制（极简实现）===
+        # Theme-based filtering
         if MAX_PER_THEME > 0:
             targets = []
             theme_count = {}
@@ -375,12 +366,11 @@ def on_bar(context, bars):
             targets = ranking_df.head(TOP_N).index.tolist()
 
         if targets:
+            # Position Sizing
             if DYNAMIC_POSITION:
-                # 动态仓位：根据市场强度调整60-100%
-                market_position = get_market_regime(context.prices_df[context.prices_df.index <= current_dt])
+                market_position = get_market_regime(history_until_now)
                 allocate_cash = active_tranche.cash * market_position
             else:
-                # 满仓运行
                 allocate_cash = active_tranche.cash
 
             per_amt = allocate_cash / len(targets)
@@ -389,21 +379,27 @@ def on_bar(context, bars):
     
     active_tranche.update_value(price_map)
 
-    # Sync to Broker
+    # 6. Synchronize Internal Bookkeeping with Broker
+    # Since it's 15:00, orders will be queued for T+1 Open execution
     global_tgt = {}
     for t in context.rpm.tranches:
         for sym, shares in t.holdings.items():
             global_tgt[sym] = global_tgt.get(sym, 0) + shares
             
-    real = {p['symbol']: p['amount'] for p in context.account().positions()}
+    # Get current actual positions from broker
+    real_positions = {p['symbol']: p['amount'] for p in context.account().positions()}
     
-    for sym in real:
-        if real[sym] > global_tgt.get(sym, 0):
-            order_target_volume(symbol=sym, volume=global_tgt.get(sym, 0), order_type=OrderType_Market, position_side=PositionSide_Long)
+    # Execute Sells first to free up capital/slots
+    for sym, amt in real_positions.items():
+        target_amt = global_tgt.get(sym, 0)
+        if amt > target_amt:
+            order_target_volume(symbol=sym, volume=target_amt, order_type=OrderType_Market, position_side=PositionSide_Long)
     
-    for sym, tgt in global_tgt.items():
-        if real.get(sym, 0) < tgt:
-            order_target_volume(symbol=sym, volume=tgt, order_type=OrderType_Market, position_side=PositionSide_Long)
+    # Execute Buys
+    for sym, target_amt in global_tgt.items():
+        current_amt = real_positions.get(sym, 0)
+        if current_amt < target_amt:
+            order_target_volume(symbol=sym, volume=target_amt, order_type=OrderType_Market, position_side=PositionSide_Long)
 
     context.rpm.save_state()
 
