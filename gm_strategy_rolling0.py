@@ -19,9 +19,9 @@ except:
     TOP_N = 3
 
 try:
-    REBALANCE_PERIOD_T = int(os.environ.get('GM_REBALANCE_T', 10))
+    REBALANCE_PERIOD_T = int(os.environ.get('GM_REBALANCE_T', 12))
 except:
-    REBALANCE_PERIOD_T = 10
+    REBALANCE_PERIOD_T = 12
 STOP_LOSS = 0.20  # 止损
 TRAILING_TRIGGER = 0.10 # 止盈
 TRAILING_DROP = 0.05  # 止盈回落止盈回落
@@ -47,7 +47,7 @@ TRAILING_DROP = 0.05  # 止盈回落止盈回落
 START_DATE = os.environ.get('GM_START_DATE', '2021-12-03 09:00:00')
 END_DATE = os.environ.get('GM_END_DATE', '2026-01-23 16:00:00')
 
-# START_DATE='2021-12-03 09:00:00'
+# START_DATE='2023-01-01 09:00:00'
 # END_DATE='2026-01-23 16:00:00'
 
 
