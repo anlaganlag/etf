@@ -19,13 +19,23 @@ except:
     TOP_N = 3
 
 try:
-    REBALANCE_PERIOD_T = int(os.environ.get('GM_REBALANCE_T', 12))
+    REBALANCE_PERIOD_T = int(os.environ.get('GM_REBALANCE_T', 11))
 except:
-    REBALANCE_PERIOD_T = 12
-STOP_LOSS = 0.20  # 止损
-TRAILING_TRIGGER = 0.10 # 止盈
-TRAILING_DROP = 0.05  # 止盈回落止盈回落
+    REBALANCE_PERIOD_T = 11
+try:
+    STOP_LOSS = float(os.environ.get('GM_STOP_LOSS', 0.20))
+except:
+    STOP_LOSS = 0.20
 
+try:
+    TRAILING_TRIGGER = float(os.environ.get('GM_TRAILING_TRIGGER', 0.15))
+except:
+    TRAILING_TRIGGER = 0.15
+
+try:
+    TRAILING_DROP = float(os.environ.get('GM_TRAILING_DROP', 0.08))
+except:
+    TRAILING_DROP = 0.08
 
 
 # 原止损止盈参数
