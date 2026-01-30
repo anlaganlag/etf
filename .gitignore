@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+etf_env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Project Specific - Data & Cache
+data_cache/
+gmcache/
+
+# Project Specific - Outputs and Results
+output/
+*.xlsx
+*.csv
+*.txt
+*.json
+*.png
+*.html
+*.log
+
+# Specific generated files (if not covered above)
+debug_log.txt
+output_log*.txt
+simulation_result*.txt
+verify_*.txt

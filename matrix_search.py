@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 import json
+import re
 from datetime import datetime
 from dotenv import load_dotenv
 from config import config
@@ -11,36 +12,33 @@ import sys
 load_dotenv()
 
 # --- Search Ranges ---
-TOP_N_RANGE = [5]
-T_RANGE = [ 13]
+TOP_N_RANGE = [5,6,7,8,9,10]
+T_RANGE = [10,11,12,13,14,15]
+
+# --- Test Period (Bull Market) ---
+TEST_START = '2024-09-01 09:00:00'
+TEST_END = '2026-01-23 16:00:00'
 
 def run_single_backtest(top_n, t_period):
     with open('gm_strategy_rolling0.py', 'r', encoding='utf-8') as f:
         content = f.read()
     
-    # Precise replacement to avoid touching other numbers
-    content = content.replace('TOP_N = 5', f'TOP_N = {top_n}')
-    content = content.replace('REBALANCE_PERIOD_T = 13', f'REBALANCE_PERIOD_T = {t_period}')
+    # Robust regex replacement - matches any existing value
+    content = re.sub(r'TOP_N\s*=\s*\d+', f'TOP_N = {top_n}', content)
+    content = re.sub(r'REBALANCE_PERIOD_T\s*=\s*\d+', f'REBALANCE_PERIOD_T = {t_period}', content)
     
     # Write to temp file
     temp_file = f'temp_bt_{top_n}_{t_period}.py'
     with open(temp_file, 'w', encoding='utf-8') as f:
         f.write(content)
     
-    # Store results in a file because run() doesn't return the indicator directly in a way that's easy to catch here
-    # Actually, we can use the return value of run()
-    
     try:
-        # Redirect stdout to null to avoid clutter
-        # original_stdout = sys.stdout
-        # sys.stdout = open(os.devnull, 'w')
-        
-        res = run(strategy_id='d6d71d85-fb4c-11f0-99de-00ffda9d6e63', 
+        res = run(strategy_id='0137c2ac-fd82-11f0-ae68-00ffda9d6e63', 
                   filename=temp_file, 
                   mode=MODE_BACKTEST,
                   token=os.getenv('MY_QUANT_TGM_TOKEN'), 
-                  backtest_start_time='2021-12-03 09:00:00', 
-                  backtest_end_time='2026-01-23 16:00:00',
+                  backtest_start_time=TEST_START, 
+                  backtest_end_time=TEST_END,
                   backtest_adjust=ADJUST_PREV, 
                   backtest_initial_cash=1000000)
         
