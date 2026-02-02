@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from config import config
 
@@ -13,29 +13,11 @@ load_dotenv()
 import os
 import json
 
-try:
-    TOP_N = int(os.environ.get('GM_TOP_N', 3))
-except:
-    TOP_N = 3
-
-try:
-    REBALANCE_PERIOD_T = int(os.environ.get('GM_REBALANCE_T', 11))
-except:
-    REBALANCE_PERIOD_T = 11
-try:
-    STOP_LOSS = float(os.environ.get('GM_STOP_LOSS', 0.20))
-except:
-    STOP_LOSS = 0.20
-
-try:
-    TRAILING_TRIGGER = float(os.environ.get('GM_TRAILING_TRIGGER', 0.15))
-except:
-    TRAILING_TRIGGER = 0.15
-
-try:
-    TRAILING_DROP = float(os.environ.get('GM_TRAILING_DROP', 0.08))
-except:
-    TRAILING_DROP = 0.08
+TOP_N = 4
+REBALANCE_PERIOD_T = 10
+STOP_LOSS = 0.15
+TRAILING_TRIGGER = 0.20
+TRAILING_DROP = 0.05
 
 
 # 原止损止盈参数
@@ -54,14 +36,18 @@ except:
 
 
 
-START_DATE = os.environ.get('GM_START_DATE', '2021-12-03 09:00:00')
-END_DATE = os.environ.get('GM_END_DATE', '2026-01-23 16:00:00')
+# START_DATE = os.environ.get('GM_START_DATE', '2021-12-03 09:00:00')
+# END_DATE = os.environ.get('GM_END_DATE', '2026-01-23 16:00:00')
 
-# START_DATE='2023-01-01 09:00:00'
+
+START_DATE='2021-12-03 09:00:00'
+END_DATE='2026-01-23 16:00:00'
+
+# START_DATE='2024-09-01 09:00:00'
 # END_DATE='2026-01-23 16:00:00'
 
-
-# === 动态仓位控制开关 ===
+# START_DATE='2021-12-03 09:00:00'
+# END_DATE='2026-01-23 16:00:00'
 DYNAMIC_POSITION = True # 开启动态仓位
 
 
@@ -157,6 +143,7 @@ class RollingPortfolioManager:
         self.tranches = []
         self.params = {"T": REBALANCE_PERIOD_T, "top_n": TOP_N}
         self.initialized = False
+        self.days_count = 0 
         self.state_path = os.path.join(config.BASE_DIR, STATE_FILE)
         self.nav_history = []  # Track daily virtual NAV (T-Close Valuation)
         
@@ -167,8 +154,9 @@ class RollingPortfolioManager:
                     data = json.load(f)
                     self.params = data.get("params", self.params)
                     self.initialized = data.get("initialized", False)
+                    self.days_count = data.get("days_count", 0)  # Load persisted day count
                     self.tranches = [Tranche.from_dict(d) for d in data.get("tranches", [])]
-                print(f"✓ Loaded State: {len(self.tranches)} tranches from {self.state_path}")
+                print(f"✓ Loaded State: {len(self.tranches)} tranches, Day {self.days_count} from {self.state_path}")
                 return True
             except Exception as e:
                 print(f"⚠️ Failed to load state: {e}")
@@ -179,6 +167,7 @@ class RollingPortfolioManager:
         data = {
             "params": self.params,
             "initialized": self.initialized,
+            "days_count": self.days_count, # Persist day count
             "tranches": [t.to_dict() for t in self.tranches]
         }
         try:
@@ -197,7 +186,7 @@ class RollingPortfolioManager:
 
     def initialize_tranches(self, total_cash):
         if self.initialized and self.tranches: return
-        share = total_cash / 7  # Aggressive Allocation (1/7th instead of 1/10th)
+        share = total_cash / REBALANCE_PERIOD_T  # Aggressive Allocation (1/7th instead of 1/10th)
         self.tranches = [Tranche(i, share) for i in range(self.params["T"])]
         self.initialized = True
         print(f"Initialized {self.params['T']} tranches.")
@@ -233,54 +222,107 @@ def init(context):
     # ---------------------------------------------
 
 
-    # 2. Build Price Matrix (Cache)
-    price_data = {}
-    files = [f for f in os.listdir(config.DATA_CACHE_DIR) if f.endswith('.csv') and (f.startswith('sh') or f.startswith('sz'))]
-    
-    # Pre-calculate necessary symbols
-    needed_symbols = context.whitelist.copy()
-    # Add indices if needed for market regime (optional, but good practice)
-    # needed_symbols.add('SHSE.000001') 
-    
-    for f in files:
-        code = f.replace('_', '.').replace('.csv', '')
-        if '.' not in code:
-            code = ('SHSE.' if code.startswith('sh') else 'SZSE.') + code[2:]
-            
-        if code not in needed_symbols:
-            continue
-            
+    # 2. Build Price Matrix
+    # 2. Build Price Matrix & Load HS300
+    if context.mode == MODE_LIVE:
+        print("☁️ Live Mode: Fetching history from GM API (Last 260 days)...")
+        
+        # --- A. 获取标的行情 (Batch) ---
+        all_symbols = list(context.whitelist)
+        end_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        start_time = (datetime.now() - timedelta(days=400)).strftime('%Y-%m-%d %H:%M:%S')
+        
+        symbol_str = ",".join(all_symbols)
         try:
-            df = pd.read_csv(os.path.join(config.DATA_CACHE_DIR, f), usecols=['日期', '收盘'])
-            df['日期'] = pd.to_datetime(df['日期']).dt.tz_localize(None)
-            price_data[code] = df.set_index('日期')['收盘']
-        except: pass
-    # 加载沪深300ETF (SHSE.510300) 作为宏观择时代理
-    try:
-        hs300_path = os.path.join(config.DATA_CACHE_DIR, 'sh510300.csv')
-        if os.path.exists(hs300_path):
-            df_hs300 = pd.read_csv(hs300_path, usecols=['日期', '收盘'])
-            df_hs300['日期'] = pd.to_datetime(df_hs300['日期']).dt.tz_localize(None)
-            context.hs300 = df_hs300.set_index('日期')['收盘'].sort_index()
-            print(f"HS300 ETF (510300) Loaded: {len(context.hs300)} days.")
-        else:
+            hd = history(symbol=symbol_str, frequency='1d', start_time=start_time, end_time=end_time, fields='symbol,close,eob', fill_missing='last', adjust=ADJUST_PREV, df=True)
+            if not hd.empty:
+                hd['eob'] = pd.to_datetime(hd['eob']).dt.tz_localize(None)
+                context.prices_df = hd.pivot(index='eob', columns='symbol', values='close').ffill()
+                
+                # 获取此时此刻的最新价格并插入/更新到最后一行
+                current_data = current(symbols=symbol_str)
+                now_prices = {item['symbol']: item['price'] for item in current_data}
+                today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                context.prices_df.loc[today_dt] = pd.Series(now_prices)
+                context.prices_df = context.prices_df.ffill()
+                
+                print(f"☁️ Live Data Ready: {context.prices_df.shape} (Includes today's live tick)")
+            else:
+                print("⚠️ Warning: API returned empty history data!")
+                context.prices_df = pd.DataFrame()
+        except Exception as e:
+            print(f"⚠️ Error fetching live data: {e}")
+            context.prices_df = pd.DataFrame()
+
+        # --- B. 获取 HS300 行情 (Macro) ---
+        try:
+            hs300_hd = history(symbol='SHSE.510300', frequency='1d', start_time=start_time, end_time=end_time, fields='close,eob', fill_missing='last', adjust=ADJUST_PREV, df=True)
+            if not hs300_hd.empty:
+                hs300_hd['eob'] = pd.to_datetime(hs300_hd['eob']).dt.tz_localize(None)
+                context.hs300 = hs300_hd.set_index('eob')['close'].sort_index()
+                
+                # 插入当前价格
+                hs300_current = current(symbols='SHSE.510300')
+                if hs300_current:
+                    context.hs300.loc[today_dt] = hs300_current[0]['price']
+                print(f"HS300 ETF Loaded: {len(context.hs300)} days (API).")
+            else:
+                context.hs300 = None
+                print("Warning: HS300 API data empty.")
+        except Exception as e:
             context.hs300 = None
-            print("Warning: HS300 ETF file not found. Macro timing disabled.")
-    except Exception as e:
-        context.hs300 = None
-        print(f"Warning: Failed to load HS300 ETF: {e}")
-    
-    context.prices_df = pd.DataFrame(price_data).sort_index().ffill()
-    print(f"Data Loaded: {context.prices_df.shape[1]} symbols.")
+            print(f"Warning: Failed to fetch HS300 API: {e}")
+
+    else:
+        # Backtest Mode: Load from local CSV cache
+        price_data = {}
+        files = [f for f in os.listdir(config.DATA_CACHE_DIR) if f.endswith('.csv') and (f.startswith('sh') or f.startswith('sz'))]
+        
+        needed_symbols = context.whitelist.copy()
+        for f in files:
+            code = f.replace('_', '.').replace('.csv', '')
+            if '.' not in code:
+                code = ('SHSE.' if code.startswith('sh') else 'SZSE.') + code[2:]
+                
+            if code not in needed_symbols:
+                continue
+                
+            try:
+                df = pd.read_csv(os.path.join(config.DATA_CACHE_DIR, f), usecols=['日期', '收盘'])
+                df['日期'] = pd.to_datetime(df['日期']).dt.tz_localize(None)
+                price_data[code] = df.set_index('日期')['收盘']
+            except: pass
+        context.prices_df = pd.DataFrame(price_data).sort_index().ffill()
+        
+        # 加载 HS300 缓存
+        try:
+            hs300_path = os.path.join(config.DATA_CACHE_DIR, 'sh510300.csv')
+            if os.path.exists(hs300_path):
+                df_hs300 = pd.read_csv(hs300_path, usecols=['日期', '收盘'])
+                df_hs300['日期'] = pd.to_datetime(df_hs300['日期']).dt.tz_localize(None)
+                context.hs300 = df_hs300.set_index('日期')['收盘'].sort_index()
+                print(f"HS300 ETF (510300) Loaded: {len(context.hs300)} days (Cache).")
+            else:
+                context.hs300 = None
+        except:
+             context.hs300 = None
+             
+        print(f"Data Loaded: {context.prices_df.shape[1]} symbols (Cache).")
 
     # 3. State Management
     if context.mode == MODE_BACKTEST and os.path.exists(context.rpm.state_path): 
         os.remove(context.rpm.state_path)
+        context.rpm.load_state() # Ensure context is clean but init fresh
     else:
         context.rpm.load_state()
 
-    context.days_count = 0
-    subscribe(symbols='SZSE.399006', frequency='1d')
+    # context.days_count moved to rpm.days_count for persistence
+    # 订阅指数行情用于实时更新（可选）
+    subscribe(symbols='SHSE.000001', frequency='1d')
+    
+    # === 定时任务 ===
+    # 每天 14:55 执行策略逻辑
+    schedule(schedule_func=algo, date_rule='1d', time_rule='14:55:00')
 
 def get_market_regime(context, current_dt):
     """判断市场环境：返回仓位系数 0.5-1.0
@@ -288,6 +330,18 @@ def get_market_regime(context, current_dt):
     """
     history = context.prices_df[context.prices_df.index <= current_dt]
     if len(history) < 60: return 1.0
+    
+    # === 宏观风控 (Macro Filter) ===
+    # 使用沪深300 (SHSE.510300) 的半年线 (MA120) 作为牛熊分界
+    # 如果大盘在半年线之下，说明是技术性熊市，必须防御
+    macro_multiplier = 1.0
+    if context.hs300 is not None:
+        hs300_hist = context.hs300[context.hs300.index <= current_dt]
+        if len(hs300_hist) > 120:
+            current_price = hs300_hist.iloc[-1]
+            ma120 = hs300_hist.tail(120).mean()
+            if current_price < ma120:
+                macro_multiplier = 0.5 # 熊市期间，所有仓位打5折
     
     # === 微观强度: ETF市场广度 ===
     recent = history.tail(60)
@@ -298,10 +352,16 @@ def get_market_regime(context, current_dt):
     above_ma60 = (current > ma60).sum() / len(current)
     strength = (above_ma20 + above_ma60) / 2
 
-    # Turbo 激进版：强势满仓，中性90%，弱势50%
-    if strength > 0.6: return 1.0
-    elif strength > 0.4: return 0.9
-    else: return 0.5
+    # 基础仓位逻辑
+    if strength > 0.6: base_pos = 1.0
+    elif strength > 0.4: base_pos = 0.9
+    else: base_pos = 0.3
+
+    # 最终仓位 = 微观仓位 * 宏观折扣
+    # 例如：弱势(0.3) * 熊市(0.5) = 0.15 (空仓保命)
+    #      强势(1.0) * 熊市(0.5) = 0.50 (熊市反弹试错)
+    #      强势(1.0) * 牛市(1.0) = 1.00 (牛市满仓)
+    return base_pos * macro_multiplier
 
 
 def get_ranking(context, current_dt):
@@ -364,9 +424,40 @@ def get_ranking(context, current_dt):
     
     return df.sort_values(by=sort_cols, ascending=asc_order), base_scores
 
-def on_bar(context, bars):
-    current_dt = context.now.replace(tzinfo=None)
-    context.days_count += 1
+# def on_bar(context, bars): -> Renamed to algo
+def algo(context):
+    current_dt = context.now.replace(tzinfo=None) # Scheduled func uses context.now
+    
+    # === 实盘模式：注入实时行情 ===
+    if context.mode == MODE_LIVE:
+        try:
+            # 获取白名单内所有标的的最新 tick
+            ticks = current(symbols=list(context.whitelist))
+            today_date = current_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            # 构建今日数据字典
+            today_data = {tick['symbol']: tick['price'] for tick in ticks if tick['price'] > 0}
+            
+            if today_data:
+                # 转换为 DataFrame 行并追加/更新
+                # 注意：这里为了性能，简单处理。如果数据量巨大需优化。
+                today_series = pd.Series(today_data, name=today_date)
+                
+                # 如果今天已经存在（比如重复运行），则更新；否则追加
+                if today_date in context.prices_df.index:
+                    context.prices_df.loc[today_date, today_series.index] = today_series
+                else:
+                    # 使用 concat 追加
+                    context.prices_df = pd.concat([context.prices_df, today_series.to_frame().T])
+                
+                context.prices_df.sort_index(inplace=True)
+                print(f"☁️ Real-time Data Injected: {len(today_data)} symbols at {current_dt}")
+        except Exception as e:
+            print(f"⚠️ Failed to fetch real-time data: {e}")
+
+    context.rpm.days_count += 1
+    # Save immediately to record the day increment
+    context.rpm.save_state()
 
     # 1. Init if needed
     if not context.rpm.initialized:
@@ -396,7 +487,7 @@ def on_bar(context, bars):
 
     # 4. Rolling Rebalance (Buy/Sell)
     # Identify which tranche is rotating today
-    active_idx = (context.days_count - 1) % REBALANCE_PERIOD_T
+    active_idx = (context.rpm.days_count - 1) % REBALANCE_PERIOD_T
     active_tranche = context.rpm.tranches[active_idx]
     
     # Sell Old Holdings in the active tranche
@@ -424,20 +515,25 @@ def on_bar(context, bars):
             targets = ranking_df.head(TOP_N).index.tolist()
 
         if targets:
+            # --- 方案 E: 分期专款 + 1% 摩擦缓冲 ---
+            # 使用该分仓内部的现金，并留出 1% 缓冲应对摩擦（滑点、税费、舍入）
+            usable_cash = active_tranche.cash * 0.99
+            
             # Position Sizing
             if DYNAMIC_POSITION:
                 market_position = get_market_regime(context, current_dt)
-                allocate_cash = active_tranche.cash * market_position
+                allocate_cash = usable_cash * market_position
             else:
-                allocate_cash = active_tranche.cash
+                allocate_cash = usable_cash
             
-            # --- AGGRESSIVE CLAMPING ---
-            # Ensure we don't allocated more than actual available cash
-            # This replicates the "Run Out of Cash" behavior
+            # --- AGGRESSIVE CLAMPING REMOVED ---
+            # Trust the internal ledger (active_tranche.cash) because sells will settle.
+            # Only log a warning if actual cash is low, but do not block.
             avail = context.account().cash.available if hasattr(context.account().cash, 'available') else context.account().cash.nav
             if allocate_cash > avail:
-                print(f"⚠️ Cash Clamp: Needed {allocate_cash:.0f}, Avail {avail:.0f}. Scaling down.")
-                allocate_cash = avail
+                print(f"⚠️ Value Warning: Internal Cash {allocate_cash:.0f} > Broker Available {avail:.0f}")
+                print(f"   Assuming funds from today's sells will be available for buys.")
+                # allocate_cash = avail  <-- THIS LINE CAUSED THE BUG
 
 
             # per_amt = allocate_cash / len(targets)
@@ -472,14 +568,41 @@ def on_bar(context, bars):
     real_positions = {p['symbol']: p['amount'] for p in context.account().positions()}
     
     # Execute Sells first to free up capital/slots
-    for sym, amt in real_positions.items():
+    for pos in context.account().positions():
+        sym = pos.symbol
+        amt = pos.amount  # Total holdings
+        avail = pos.available # T+0 sellable holdings
+        
+        # SAFETY: Only sell symbols that are in our whitelist (Strategy Controlled)
+        if sym not in context.whitelist:
+            continue
+            
         target_amt = global_tgt.get(sym, 0)
+        
+        # Logic: We want to reach 'target_amt'.
+        # If current total 'amt' > 'target_amt', we need to sell (amt - target_amt).
+        # But we can ONLY sell what is 'available'.
         if amt > target_amt:
-            order_target_volume(symbol=sym, volume=target_amt, order_type=OrderType_Market, position_side=PositionSide_Long)
-    
+            qty_to_sell = amt - target_amt
+            # Clamp sell quantity to available holdings
+            actual_sell_qty = min(qty_to_sell, avail)
+            
+            if actual_sell_qty > 0:
+                # Use order_volume (sell specific amount) instead of order_target_volume
+                # because we've manually calculated the safe sellable amount.
+                order_volume(symbol=sym, volume=actual_sell_qty, side=OrderSide_Sell, order_type=OrderType_Market, position_effect=PositionEffect_Close)
+                print(f"📉 Selling {sym}: Need to sell {qty_to_sell}, Avail {avail} -> Action: {actual_sell_qty}")
+            else:
+                 if qty_to_sell > 0:
+                     print(f"🔒 Skip Sell {sym}: Want to sell {qty_to_sell} but available is {avail} (T+1 Lock)")
+
     # Execute Buys
+    # Refetch actual positions after sends (though they might not be filled yet, wait logic is complex, 
+    # so we trust the 'available' cash check will handle subsequent buys)
+    real_positions_map = {p.symbol: p.amount for p in context.account().positions()}
+    
     for sym, target_amt in global_tgt.items():
-        current_amt = real_positions.get(sym, 0)
+        current_amt = real_positions_map.get(sym, 0)
         if current_amt < target_amt:
             order_target_volume(symbol=sym, volume=target_amt, order_type=OrderType_Market, position_side=PositionSide_Long)
 
@@ -496,23 +619,47 @@ def on_backtest_finished(context, indicator):
     print(f"Sharpe: {indicator.get('sharp_ratio', 0):.2f}")
     
     # Calculate Simulated Performance (T-Close Execution)
-    history = context.rpm.nav_history
-    if history:
-        nav = pd.Series(history)
-        if nav.iloc[0] > 0:
-            ret = (nav.iloc[-1] / nav.iloc[0] - 1) * 100
-            dd = ((nav - nav.cummax()) / nav.cummax()).min() * 100
-            daily_ret = nav.pct_change().dropna()
-            sharpe = np.sqrt(252) * daily_ret.mean() / daily_ret.std() if daily_ret.std() > 0 else 0
+    # history = context.rpm.nav_history
+    # if history:
+    #     nav = pd.Series(history)
+    #     if nav.iloc[0] > 0:
+    #         ret = (nav.iloc[-1] / nav.iloc[0] - 1) * 100
+    #         dd = ((nav - nav.cummax()) / nav.cummax()).min() * 100
+    #         daily_ret = nav.pct_change().dropna()
+    #         sharpe = np.sqrt(252) * daily_ret.mean() / daily_ret.std() if daily_ret.std() > 0 else 0
             
-            print(f"\n=== SIMULATED REPORT (T-CLOSE EXECUTION / LIVE PROXY) ===")
-            print(f"Return: {ret:.2f}%")
-            print(f"Max DD: {dd:.2f}%")
-            print(f"Sharpe: {sharpe:.2f}")
-            print("(Note: This matches run_optimization results and Live Trading logic)")
+    #         print(f"\n=== SIMULATED REPORT (T-CLOSE EXECUTION / LIVE PROXY) ===")
+    #         print(f"Return: {ret:.2f}%")
+    #         print(f"Max DD: {dd:.2f}%")
+    #         print(f"Sharpe: {sharpe:.2f}")
+    #         print("(Note: This matches run_optimization results and Live Trading logic)")
     
-    print("\nrolling0")
+    # print("\nrolling0")
 if __name__ == '__main__':
-    run(strategy_id='0137c2ac-fd82-11f0-ae68-00ffda9d6e63', filename='gm_strategy_rolling0.py', mode=MODE_BACKTEST,
-        token=os.getenv('MY_QUANT_TGM_TOKEN'), backtest_start_time=START_DATE, backtest_end_time=END_DATE,
-        backtest_adjust=ADJUST_PREV, backtest_initial_cash=1000000)
+    # === 运行模式配置 ===
+    # 'BACKTEST': 回测模式 (跑历史数据)
+    # 'LIVE': 实盘/仿真模式 (连接终端实时交易)
+    RUN_MODE = 'LIVE' 
+
+    # 策略 ID (请确保与掘金终端里的策略 ID 一致)
+    STRATEGY_ID = '0137c2ac-fd82-11f0-ae68-00ffda9d6e63'
+
+    if RUN_MODE == 'LIVE':
+        print(f"🚀 正在启动仿真/实盘交易...")
+        print(f"⚠️ 请确认已在掘金终端将账户 [658419cf-ffe1-11f0-a908-00163e022aa6] 绑定到策略 [{STRATEGY_ID}]")
+        
+        run(strategy_id=STRATEGY_ID, 
+            filename='gm_strategy_rolling0.py', 
+            mode=MODE_LIVE,
+            token=os.getenv('MY_QUANT_TGM_TOKEN'))
+            
+    else:
+        print(f"📉 正在启动回测...")
+        run(strategy_id=STRATEGY_ID, 
+            filename='gm_strategy_rolling0.py', 
+            mode=MODE_BACKTEST,
+            token=os.getenv('MY_QUANT_TGM_TOKEN'), 
+            backtest_start_time=START_DATE, 
+            backtest_end_time=END_DATE,
+            backtest_adjust=ADJUST_PREV, 
+            backtest_initial_cash=1000000)
