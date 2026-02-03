@@ -455,6 +455,7 @@ def get_ranking(context, current_dt):
     base_scores = pd.Series(0.0, index=history.columns)
     
     # Updated Optimal Weights (Decoupled Logic)
+    # Updated Optimal Weights (Decoupled Logic)
     # R1=30, R3=-70, R5=0 (Linear 'weight' is 0, but we will use it as a Gate), R20=150
     periods_rule = {1: 30, 3: -70, 5: 0, 10: 0, 20: 150}
 
