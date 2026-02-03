@@ -404,6 +404,8 @@ def init(context):
     # 每天 14:55 执行策略逻辑
     schedule(schedule_func=algo, date_rule='1d', time_rule='14:55:00')
 
+
+
 def get_market_regime(context, current_dt):
     """判断市场环境：返回仓位系数 0.5-1.0
     仅使用微观ETF市场广度，不使用宏观年线（避免牛市踏空）
@@ -734,7 +736,12 @@ def algo(context):
 
     # 1. Init if needed
     if not context.rpm.initialized:
-        cash = context.account().cash.available if hasattr(context.account().cash, 'available') else context.account().cash.nav
+        account = context.account()
+        if account is None:
+             print("⚠️ Account data not ready yet. Skipping init...")
+             return
+             
+        cash = account.cash.available if hasattr(account.cash, 'available') else account.cash.nav
         context.rpm.initialize_tranches(cash)
 
     # === Reconcile Virtual vs Real ===
@@ -929,7 +936,7 @@ if __name__ == '__main__':
     # === 运行模式配置 ===
     # 'BACKTEST': 回测模式 (跑历史数据)
     # 'LIVE': 实盘/仿真模式 (连接终端实时交易)
-    RUN_MODE = 'BACKTEST' 
+    RUN_MODE = 'LIVE' 
 
     # 策略 ID (请确保与掘金终端里的策略 ID 一致)
     STRATEGY_ID = '0137c2ac-fd82-11f0-ae68-00ffda9d6e63'
