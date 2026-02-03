@@ -463,22 +463,43 @@ def get_ranking(context, current_dt):
     # Instead of fixed -8%, check if drop exceeds k * sigma.
     # Logic: Structure is BROKEN if the drop is statistically abnormal (e.g. > 2 sigma).
     
-    # 1. Calculate Volatility (Std Dev of daily returns over last 60 days)
-    daily_rets = history.pct_change()
-    vol_60d = daily_rets.tail(60).std()
+    # --- Structural Gate (Non-linear Filter) ---
+    # Upgrade: Dynamic Volatility Gate (Z-Score) with ROBUST Ruler
+    # Ruler = Lagged Downside Volatility
+    # 1. Lagged: Use t-65 to t-5 (Pre-crash volatility) to avoid "Adaptive Failure"
+    # 2. Downside: Only measure downside risk to avoid punishing upside volatility
     
-    # Avoid division by zero: replace 0 vol with a small number or handle gracefully
-    vol_60d = vol_60d.replace(0, 0.01).fillna(0.01)
+    daily_rets = history.pct_change()
+    
+    # Lagged slice: Exclude last 5 days from the ruler
+    lagged_rets = daily_rets.iloc[:-5].tail(60) 
+    
+    # Downside only: Measure std dev of negative returns
+    downside_rets = lagged_rets[lagged_rets < 0]
+    
+    # Calculate per-symbol metrics
+    vol_down = downside_rets.std()
+    vol_full = lagged_rets.std()
+    count_down = downside_rets.count()
+    
+    # Vectorized fallback: Use downside vol if > 10 points, else full vol
+    # Note: vol_down or vol_full can be NaN if column is empty
+    vol_ruler = vol_down.where(count_down > 10, vol_full)
+    
+    # Fill remaining NaNs and apply floor
+    vol_ruler = vol_ruler.fillna(0.01)
+    vol_ruler = vol_ruler.clip(lower=0.005)
 
     # 2. Calculate Z-Score of the 5-day return
     # Expected 5-day vol = daily_vol * sqrt(5)
-    expected_5d_vol = vol_60d * np.sqrt(5)
+    expected_5d_vol = vol_ruler * np.sqrt(5)
     r5_z_score = r5_raw / expected_5d_vol
     
     # 3. Dynamic Gate Threshold (k sigma)
-    # Default to 2.0 (2 Sigma event) - OPTIMAL confirmed by grid search (Ret 47.64%, Sharpe 0.62)
-    # Note: We are looking for DROP, so we check if Z > -k
-    k_sigma = float(os.environ.get('OPT_R5_K', 2.0)) 
+    # Default to 1.6 (Robust Plateau: 1.5~1.8). 
+    # Logic: With "Quiet Downside Vol" as ruler, drops > 1.6 sigma are toxic.
+    # Note: K=2.0 allowed "mildly broken" structures that hurt perf (31% vs 44%).
+    k_sigma = float(os.environ.get('OPT_R5_K', 1.6)) 
     
     is_structure_intact = pd.Series(True, index=base_scores.index)
     if k_sigma > 0 and r5_raw is not None:
