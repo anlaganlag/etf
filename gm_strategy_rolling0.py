@@ -432,21 +432,24 @@ def get_ranking(context, current_dt):
     base_scores = pd.Series(0.0, index=history.columns)
     
     # Updated Optimal Weights (Decoupled Logic)
-    # R1=30: Lower trigger needed (don't chase only big pops)
-    # R3=-70: Strong sentiment mean reversion (hate 3-day rallies)
-    # R5=0: Structure neutral (don't punish 5-day trends)
+    # R1=30, R3=-70, R5=0 (Linear 'weight' is 0, but we will use it as a Gate), R20=150
     periods_rule = {1: 30, 3: -70, 5: 0, 10: 0, 20: 150}
 
     rets_dict = {}
+    r5_raw = None # Capture R5 constraints
+    
     for p, pts in periods_rule.items():
         # 这里使用绝对涨幅，不对比 HS300
         rets = (last_row / history.iloc[-(p+1)]) - 1
         rets_dict[f'r{p}'] = rets
         
+        if p == 5:
+            r5_raw = rets 
+
         # 直接按收益排名
         ranks = rets.rank(ascending=False, method='min')
         
-        # Skip calculation if weight is 0 to save time/noise
+        # Skip calculation if weight is 0
         if pts != 0:
             if SCORING_METHOD == 'SMOOTH':
                 decay = (30 - ranks) / 30
@@ -455,8 +458,23 @@ def get_ranking(context, current_dt):
             else: 
                 base_scores += (ranks <= 15) * pts
     
-    # 这一步非常关键：移除 is_trending.astype(float) 过滤
+    # --- Structural Gate (Non-linear Filter) ---
+    # R5 Gate: Exclude stocks that have crashed too deep in the medium term.
+    # Logic: Structure is BROKEN if 5-day return is below threshold.
+    r5_gate_threshold = float(os.environ.get('OPT_R5_GATE', -0.08)) # Optimal Gate found: -0.08
+    
+    is_structure_intact = pd.Series(True, index=base_scores.index)
+    if r5_gate_threshold > -1.0 and r5_raw is not None:
+         # "Gate": Keep only if r5 > threshold (e.g. > -0.05)
+         is_structure_intact = r5_raw > r5_gate_threshold
+
+    # Apply Gate: Zero out scores for broken structures
+    base_scores = base_scores * is_structure_intact.astype(float)
+
+    # 2. 限制在白名单内
     valid_scores = base_scores[base_scores.index.isin(context.whitelist)]
+    
+    # 3. 基础得分阈值
     valid_scores = valid_scores[valid_scores >= MIN_SCORE]
     
     if valid_scores.empty: return None, base_scores
