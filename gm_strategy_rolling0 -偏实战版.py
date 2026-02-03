@@ -15,8 +15,8 @@ import json
 
 TOP_N = 4
 REBALANCE_PERIOD_T = 10
-STOP_LOSS = 0.12
-TRAILING_TRIGGER = 0.25
+STOP_LOSS = 0.15
+TRAILING_TRIGGER = 0.20
 TRAILING_DROP = 0.05
 
 
@@ -359,12 +359,8 @@ def init(context):
 
     # 3. State Management
     if context.mode == MODE_BACKTEST and os.path.exists(context.rpm.state_path): 
-        try:
-            os.remove(context.rpm.state_path)
-            print("🗑️ Backtest Mode: Deleted previous state file.", flush=True)
-        except Exception as e:
-            print(f"⚠️ Failed to delete state file: {e}", flush=True)
-        context.rpm.load_state() 
+        os.remove(context.rpm.state_path)
+        context.rpm.load_state() # Ensure context is clean but init fresh
     else:
         context.rpm.load_state()
 
@@ -405,19 +401,15 @@ def get_market_regime(context, current_dt):
     strength = (above_ma20 + above_ma60) / 2
 
     # 基础仓位逻辑
-    # 基础仓位逻辑
     if strength > 0.6: base_pos = 1.0
     elif strength > 0.4: base_pos = 0.9
     else: base_pos = 0.3
 
     # 最终仓位 = 微观仓位 * 宏观折扣
-    final_pos = base_pos * macro_multiplier
-    
-    # Turbo Logic: 如果是熊市(Macro<1)且微观弱势(Strength<=0.4)，直接空仓防御
-    if macro_multiplier < 1.0 and strength <= 0.4:
-        return 0.0
-
-    return final_pos
+    # 例如：弱势(0.3) * 熊市(0.5) = 0.15 (空仓保命)
+    #      强势(1.0) * 熊市(0.5) = 0.50 (熊市反弹试错)
+    #      强势(1.0) * 牛市(1.0) = 1.00 (牛市满仓)
+    return base_pos * macro_multiplier
 
 
 def get_ranking(context, current_dt):
@@ -524,7 +516,7 @@ def algo(context):
     # 修复：强行对齐虚拟分仓与真实持仓，防止“幽灵持仓”导致后续逻辑错乱
     try:
         real_positions = {p.symbol: p.amount for p in context.account().positions()}
-        context.rpm.reconcile_with_broker(real_positions)
+        # context.rpm.reconcile_with_broker(real_positions)
     except Exception as e:
         print(f"⚠️ Reconcile Error: {e}")
 
@@ -632,24 +624,40 @@ def algo(context):
     real_positions = {p['symbol']: p['amount'] for p in context.account().positions()}
     
     # Execute Sells first to free up capital/slots
-    # Execute Sells first to free up capital/slots
-    # Minimal Safe Sell Logic (Iterate ALL broker positions)
-    # 移除白名单限制，确保能卖出所有非目标持仓
     for pos in context.account().positions():
         sym = pos.symbol
-        tgt = global_tgt.get(sym, 0)
-        diff = pos.amount - tgt
+        amt = pos.amount  # Total holdings
+        avail = pos.available # T+0 sellable holdings
         
-        if diff > 0:
-            # Check T+0 availability
-            if pos.available > 0:
-                qty_to_sell = min(diff, pos.available)
-                vol = int(qty_to_sell)
-                if vol > 0:
-                    order_volume(symbol=sym, volume=vol, side=OrderSide_Sell, order_type=OrderType_Market, position_effect=PositionEffect_Close)
-                    print(f"📉 Selling {sym}: {vol} (Target {tgt}, Held {pos.amount})", flush=True)
+        # SAFETY: Only sell symbols that are in our whitelist (Strategy Controlled)
+        if sym not in context.whitelist:
+            continue
+            
+        target_amt = global_tgt.get(sym, 0)
+        
+        # Logic: We want to reach 'target_amt'.
+        # If current total 'amt' > 'target_amt', we need to sell (amt - target_amt).
+        # But we can ONLY sell what is 'available'.
+        if amt > target_amt:
+            qty_to_sell = amt - target_amt
+            # Clamp sell quantity to available holdings
+            actual_sell_qty = min(qty_to_sell, avail)
+            
+            if actual_sell_qty > 0:
+                # Use order_volume (sell specific amount) instead of order_target_volume
+                # because we've manually calculated the safe sellable amount.
+                # REVERT: Remove int cast to reproduce original behavior
+                # final_vol = int(actual_sell_qty)
+                if actual_sell_qty > 0:
+                    try:
+                        order_volume(symbol=sym, volume=actual_sell_qty, side=OrderSide_Sell, order_type=OrderType_Market, position_effect=PositionEffect_Close)
+                        print(f"📉 Selling {sym}: Need to sell {qty_to_sell:.0f}, Avail {avail:.0f} -> Action: {actual_sell_qty}")
+                    except TypeError:
+                         # Fallback if API refuses floats (simulating old loose behavior or just ignoring error)
+                         order_volume(symbol=sym, volume=int(actual_sell_qty), side=OrderSide_Sell, order_type=OrderType_Market, position_effect=PositionEffect_Close)
             else:
-                 print(f"🔒 Skip Sell {sym}: Want to sell {diff} but available is 0 (T+1 Lock)", flush=True)
+                 if qty_to_sell > 0:
+                     print(f"🔒 Skip Sell {sym}: Want to sell {qty_to_sell} but available is {avail} (T+1 Lock)")
 
     # Execute Buys
     # Refetch actual positions after sends (though they might not be filled yet, wait logic is complex, 
@@ -659,9 +667,10 @@ def algo(context):
     for sym, target_amt in global_tgt.items():
         current_amt = real_positions_map.get(sym, 0)
         if current_amt < target_amt:
-            # FIX: target_volume expects int, cast to int
-            tgt_vol = int(target_amt)
-            order_target_volume(symbol=sym, volume=tgt_vol, order_type=OrderType_Market, position_side=PositionSide_Long)
+             try:
+                order_target_volume(symbol=sym, volume=target_amt, order_type=OrderType_Market, position_side=PositionSide_Long)
+             except TypeError:
+                order_target_volume(symbol=sym, volume=int(target_amt), order_type=OrderType_Market, position_side=PositionSide_Long)
 
     context.rpm.save_state()
     
