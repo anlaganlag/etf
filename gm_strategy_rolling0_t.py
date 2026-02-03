@@ -10,34 +10,13 @@ from config import config
 
 load_dotenv()
 
-import os
-import json
-
 TOP_N = 4
 REBALANCE_PERIOD_T = 10
-STOP_LOSS = 0.20
+STOP_LOSS = 0.30
 TRAILING_TRIGGER = 0.15
-TRAILING_DROP = 0.05
-
-
-# 原止损止盈参数
-# STOP_LOSS = 0.05  # 止损
-# TRAILING_TRIGGER = 0.06 # 止盈
-# TRAILING_DROP = 0.02  # 止盈回落
-
-
-
-# --- 原始参数  ---
-# TOP_N = 5
-# REBALANCE_PERIOD_T = 13
-# STOP_LOSS = 0.20  # 止损
-# TRAILING_TRIGGER = 0.10 # 止盈
-# TRAILING_DROP = 0.05  # 止盈回落
-
-
+TRAILING_DROP = 0.03
 
 # START_DATE = os.environ.get('GM_START_DATE', '2021-12-03 09:00:00')
-# END_DATE = os.environ.get('GM_END_DATE', '2026-01-23 16:00:00')
 
 
 START_DATE='2021-12-03 09:00:00'
@@ -719,4 +698,5 @@ if __name__ == '__main__':
             backtest_start_time=START_DATE, 
             backtest_end_time=END_DATE,
             backtest_adjust=ADJUST_PREV, 
-            backtest_initial_cash=1000000)
+            backtest_initial_cash=1000000,
+            backtest_commission_ratio=0.0001)

@@ -12,10 +12,9 @@ load_dotenv()
 
 TOP_N = 4
 REBALANCE_PERIOD_T = 10
-STOP_LOSS = 0.30
-TRAILING_TRIGGER = 0.10
-TRAILING_DROP = 0.03
-
+STOP_LOSS = 0.30          # 止损 30%
+TRAILING_TRIGGER = 0.15   # 15% 开启追踪止盈
+TRAILING_DROP = 0.03      # 回落 3% 止盈退出
 
 # TOP_N = 4
 # REBALANCE_PERIOD_T = 10
@@ -425,64 +424,133 @@ def get_market_regime(context, current_dt):
 
     return final_pos
 
-
 def get_ranking(context, current_dt):
-    # V6 Score Logic
     history = context.prices_df[context.prices_df.index <= current_dt]
     if len(history) < 251: return None, None
 
-    base_scores = pd.Series(0.0, index=history.columns)
-    # periods_rule = {1: 20, 3: 30, 5: 50, 10: 70, 20: 100}  # 反转权重：长期优先
-
-    # 修改为激进版 (Inverse Middle - breakthrough 40% Return):
-    periods_rule = {1: 50, 3: -70, 5: -70, 10: 0, 20: 150}
-
-    
-    # Calculate returns for all periods
-    # Note: rets_dict will store the raw returns for sorting tie-breaking
-    rets_dict = {}
     last_row = history.iloc[-1]
+    base_scores = pd.Series(0.0, index=history.columns)
     
+    # 核心：Inverse Middle 激进版权重
+    periods_rule = {1: 50, 3: -70, 5: -70, 10: 0, 20: 150}
+    
+    rets_dict = {}
     for p, pts in periods_rule.items():
-        # r_p = (current / t-p) - 1
+        # 这里使用绝对涨幅，不对比 HS300
         rets = (last_row / history.iloc[-(p+1)]) - 1
         rets_dict[f'r{p}'] = rets
         
+        # 直接按收益排名
         ranks = rets.rank(ascending=False, method='min')
         
         if SCORING_METHOD == 'SMOOTH':
-             # 平滑评分：前30名线性得分 (第1名100%，第15名53%，第30名3%)
-             # 解决了第15名和第16名的断崖问题
+            decay = (30 - ranks) / 30
+            decay = decay.clip(lower=0)
+            base_scores += decay * pts
+        else: 
+            base_scores += (ranks <= 15) * pts
+    
+    # 这一步非常关键：移除 is_trending.astype(float) 过滤
+    valid_scores = base_scores[base_scores.index.isin(context.whitelist)]
+    valid_scores = valid_scores[valid_scores >= MIN_SCORE]
+    
+    if valid_scores.empty: return None, base_scores
+
+    data_to_df = {
+        'score': valid_scores, 
+        'theme': [context.theme_map.get(c, 'Unknown') for c in valid_scores.index],
+        'etf_code': valid_scores.index 
+    }
+    
+    for p in periods_rule.keys():
+        data_to_df[f'r{p}'] = rets_dict[f'r{p}'][valid_scores.index]
+
+    df = pd.DataFrame(data_to_df)
+    
+    # 还原排序逻辑：Score -> r1 (短动量) -> 其他周期 -> Code
+    sort_cols = ['score', 'r1', 'r3', 'r5', 'r10', 'r20', 'etf_code']
+    asc_order = [False, False, False, False, False, False, True]
+    
+    return df.sort_values(by=sort_cols, ascending=asc_order), base_scores
+
+
+
+def get_ranking_explore(context, current_dt):
+    # V6.1 Score Logic: Module 1 (Relative Alpha) + Module 2 (Trend Filter)
+    history = context.prices_df[context.prices_df.index <= current_dt]
+    if len(history) < 251: return None, None
+
+    last_row = history.iloc[-1]
+    
+    # === Module 2: 趋势过滤 (Trend Filter) ===
+    # 核心逻辑：只有处于“可趋势区”的标的才参与评分
+    ma20 = history.tail(20).mean()
+    ma60 = history.tail(60).mean()
+    # 判断：价格在20日均线上方（短期走强）且不处于严重的长期破位（价格>MA60或MA20>MA60）
+    is_trending = (last_row > ma20) & (last_row > ma60)
+    
+    # --- Module 1: 相对强度模块 (Relative Alpha) ---
+    # 获取同期的 HS300 表现作为基准
+    hs300_hist = None
+    if context.hs300 is not None:
+        hs300_hist = context.hs300[context.hs300.index <= current_dt]
+
+    base_scores = pd.Series(0.0, index=history.columns)
+    # 激进版权重：保持原有的 Inverse Middle 逻辑
+    periods_rule = {1: 50, 3: -70, 5: -70, 10: 0, 20: 150}
+    
+    rets_dict = {}
+    for p, pts in periods_rule.items():
+        # 计算绝对涨幅
+        rets = (last_row / history.iloc[-(p+1)]) - 1
+        rets_dict[f'r{p}'] = rets
+        
+        # 计算 Alpha (超额收益)
+        if hs300_hist is not None and len(hs300_hist) > p:
+            hs300_p_ret = (hs300_hist.iloc[-1] / hs300_hist.iloc[-(p+1)]) - 1
+            alpha = rets - hs300_p_ret
+        else:
+            alpha = rets # 降级为绝对收益
+            
+        # 基于 Alpha 进行排名
+        ranks = alpha.rank(ascending=False, method='min')
+        
+        if SCORING_METHOD == 'SMOOTH':
              decay = (30 - ranks) / 30
              decay = decay.clip(lower=0)
              base_scores += decay * pts
         else: # 'STEP' 原版
              base_scores += (ranks <= 15) * pts
     
-    # Filter
+    # --- 最终整合过滤 ---
+    # 1. 应用趋势过滤 (Module 2)
+    # 趋势不好的标的得分直接清零，不参与后续 TopN 选拔
+    base_scores = base_scores * is_trending.astype(float)
+    
+    # 2. 限制在白名单内
     valid_scores = base_scores[base_scores.index.isin(context.whitelist)]
+    
+    # 3. 基础得分阈值
     valid_scores = valid_scores[valid_scores >= MIN_SCORE]
     
     if valid_scores.empty: return None, base_scores
 
-    # Construct DataFrame with all return metrics for sorting
+    # 构建结果 DataFrame 用于排序
+    # 即使评分一样，我们也优先选绝对收益最好的标的或者是代码更考前的以保证确定性
     data_to_df = {
         'score': valid_scores, 
         'theme': [context.theme_map.get(c, 'Unknown') for c in valid_scores.index],
-        'etf_code': valid_scores.index # For final deterministic tie-breaking
+        'etf_code': valid_scores.index 
     }
     
-    # Add returns to DataFrame data dict
     for p in periods_rule.keys():
-        # Align rets to valid_scores index
         data_to_df[f'r{p}'] = rets_dict[f'r{p}'][valid_scores.index]
 
     df = pd.DataFrame(data_to_df)
     
-    # Sort by: Score -> r1 -> r3 -> r5 -> r10 -> r20 -> Code
-    # All returns Descending, Code Ascending
-    sort_cols = ['score', 'r1', 'r3', 'r5', 'r10', 'r20', 'etf_code']
-    asc_order = [False, False, False, False, False, False, True]
+    # 排序：得分 -> 20日绝对收益 -> 1日收益 -> 代码
+    sort_cols = ['score', 'r20', 'r1', 'etf_code']
+    asc_order = [False, False, False, True]
     
     return df.sort_values(by=sort_cols, ascending=asc_order), base_scores
 
