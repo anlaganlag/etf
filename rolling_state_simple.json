@@ -8,17 +8,24 @@
   "tranches": [
     {
       "id": 0,
-      "cash": 94993.78384448413,
-      "holdings": {},
-      "pos_records": {},
-      "total_value": 94993.78384448413,
+      "cash": 71506.99117819405,
+      "holdings": {
+        "SZSE.159638": 23800
+      },
+      "pos_records": {
+        "SZSE.159638": {
+          "entry_price": 1.181,
+          "high_price": 1.187
+        }
+      },
+      "total_value": 99757.59117819405,
       "guard_triggered_today": false
     },
     {
       "id": 1,
-      "cash": 68851.41457888982,
+      "cash": 71716.62378516744,
       "holdings": {
-        "SHSE.512980": 22900
+        "SHSE.512980": 23900
       },
       "pos_records": {
         "SHSE.512980": {
@@ -26,40 +33,45 @@
           "high_price": 1.181
         }
       },
-      "total_value": 95896.31457888981,
+      "total_value": 99942.52378516743,
       "guard_triggered_today": false
     },
     {
       "id": 2,
-      "cash": 72326.97974648334,
+      "cash": 55659.18851272161,
       "holdings": {
-        "SHSE.512980": 24100
+        "SHSE.512980": 21300,
+        "SHSE.512710": 9688.735908216062
       },
       "pos_records": {
         "SHSE.512980": {
           "entry_price": 1.179,
           "high_price": 1.181
+        },
+        "SHSE.512710": {
+          "entry_price": 0.869,
+          "high_price": 0.897
         }
       },
-      "total_value": 100789.07974648334,
+      "total_value": 89505.28462239142,
       "guard_triggered_today": false
     },
     {
       "id": 3,
-      "cash": 116776.21244995395,
+      "cash": 112943.12857667914,
       "holdings": {},
       "pos_records": {},
-      "total_value": 116776.21244995395,
+      "total_value": 112943.12857667914,
       "guard_triggered_today": false
     },
     {
       "id": 4,
-      "cash": 1304.2875727358369,
+      "cash": 1333.182680822294,
       "holdings": {
-        "SZSE.159206": 14400,
-        "SZSE.159378": 18300,
-        "SHSE.512710": 31100,
-        "SZSE.159638": 11700
+        "SZSE.159206": 13100,
+        "SZSE.159378": 16700,
+        "SHSE.512710": 28400,
+        "SZSE.159638": 10700
       },
       "pos_records": {
         "SZSE.159206": {
@@ -79,54 +91,44 @@
           "high_price": 1.187
         }
       },
-      "total_value": 98889.18757273583,
+      "total_value": 90351.08268082229,
       "guard_triggered_today": false
     },
     {
       "id": 5,
-      "cash": 73315.45594299349,
+      "cash": 81812.65845483425,
       "holdings": {
-        "SZSE.159852": 28900,
-        "SHSE.516650": 1484.0002059936523
+        "SZSE.159852": 20766.324842672235
       },
       "pos_records": {
         "SZSE.159852": {
           "entry_price": 1.041,
           "high_price": 1.06
-        },
-        "SHSE.516650": {
-          "entry_price": 2.09,
-          "high_price": 2.205
         }
       },
-      "total_value": 104849.61239288363,
+      "total_value": 102142.89047581036,
       "guard_triggered_today": false
     },
     {
       "id": 6,
-      "cash": 59151.61666598394,
+      "cash": 84982.03880990602,
       "holdings": {
-        "SHSE.516650": 13600,
-        "SZSE.159870": 16900
+        "SZSE.159870": 16400
       },
       "pos_records": {
-        "SHSE.516650": {
-          "entry_price": 2.112,
-          "high_price": 2.205
-        },
         "SZSE.159870": {
           "entry_price": 0.851,
           "high_price": 0.918
         }
       },
-      "total_value": 104368.21666598394,
+      "total_value": 100037.23880990602,
       "guard_triggered_today": false
     },
     {
       "id": 7,
-      "cash": 96477.0613015028,
+      "cash": 81694.95003212233,
       "holdings": {
-        "SHSE.512670": 8120.328179657699
+        "SHSE.512670": 6261.109403300521
       },
       "pos_records": {
         "SHSE.512670": {
@@ -134,22 +136,17 @@
           "high_price": 1.035
         }
       },
-      "total_value": 104849.11965472989,
+      "total_value": 88150.15382692516,
       "guard_triggered_today": false
     },
     {
       "id": 8,
-      "cash": 41639.57108570853,
+      "cash": 76998.90389233785,
       "holdings": {
-        "SZSE.159206": 14905.50023317337,
-        "SHSE.512710": 24436.777624970564,
-        "SZSE.159638": 16453.745480806014
+        "SHSE.512710": 21147.66184776421,
+        "SZSE.159638": 3827.455285579097
       },
       "pos_records": {
-        "SZSE.159206": {
-          "entry_price": 1.968,
-          "high_price": 1.975
-        },
         "SHSE.512710": {
           "entry_price": 0.873,
           "high_price": 0.897
@@ -159,23 +156,18 @@
           "high_price": 1.187
         }
       },
-      "total_value": 111961.91045268069,
+      "total_value": 100511.54599376474,
       "guard_triggered_today": false
     },
     {
       "id": 9,
-      "cash": 1442.1629296116225,
+      "cash": 29952.113025402447,
       "holdings": {
-        "SZSE.159206": 15000,
-        "SHSE.512670": 29500,
-        "SZSE.159638": 25800,
-        "SHSE.512710": 17300
+        "SHSE.512670": 28500,
+        "SZSE.159638": 25000,
+        "SHSE.512710": 16700
       },
       "pos_records": {
-        "SZSE.159206": {
-          "entry_price": 1.974,
-          "high_price": 1.975
-        },
         "SHSE.512670": {
           "entry_price": 1.007,
           "high_price": 1.031
@@ -189,7 +181,7 @@
           "high_price": 0.897
         }
       },
-      "total_value": 107054.36292961163,
+      "total_value": 103990.51302540244,
       "guard_triggered_today": false
     }
   ]
