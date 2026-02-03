@@ -16,6 +16,9 @@ STOP_LOSS = 0.30          # 止损 30%
 TRAILING_TRIGGER = 0.15   # 15% 开启追踪止盈
 TRAILING_DROP = 0.03      # 回落 3% 止盈退出
 
+# Account ID for Live Trading
+ACCOUNT_ID = os.environ.get('GM_ACCOUNT_ID', '658419cf-ffe1-11f0-a908-00163e022aa6')
+
 # TOP_N = 4
 # REBALANCE_PERIOD_T = 10
 # STOP_LOSS = 0.20
@@ -54,6 +57,7 @@ END_DATE='2026-01-23 16:00:00'
 # START_DATE='2021-12-03 09:00:00'
 # END_DATE='2026-01-23 16:00:00'
 DYNAMIC_POSITION = True # 开启动态仓位
+ENABLE_META_GATE = True # False=幽灵模式(只记录不减仓，收益高) | True=开启防御(回撤小)
 
 
 # === 评分机制开关 ===
@@ -248,6 +252,25 @@ class RollingPortfolioManager:
 def init(context):
     print(f"Initializing Simple Strategy (T={REBALANCE_PERIOD_T}, TopN={TOP_N}, Mode={SCORING_METHOD})")
     context.rpm = RollingPortfolioManager()
+    
+    # Check RUN_MODE from env (default to LIVE if not set, to be safe? No, default backtest)
+    run_mode = os.environ.get('GM_MODE', 'BACKTEST').upper()
+    context.mode = MODE_BACKTEST if run_mode == 'BACKTEST' else MODE_LIVE
+    context.account_id = ACCOUNT_ID
+    
+    # --- Meta-Gate State Machine (Capital Layer) ---
+    context.market_state = 'SAFE' # SAFE, CAUTION, DANGER
+    context.risk_scaler = 1.0     # 1.0, 0.5, 0.0
+    context.br_history = []       # For smoothing Broken_Ratio (Rolling 3 days)
+    
+    # Meta-Gate Thresholds (Hysteresis)
+    # Meta-Gate Thresholds (Hysteresis) - Firefighter Mode V2
+    # Strategy: 1.0 (Safe/Low Caution) -> 0.7 (Pre-Danger) -> 0.0 (Danger)
+    context.BR_CAUTION_IN = 0.40  
+    context.BR_CAUTION_OUT = 0.30 
+    context.BR_DANGER_IN = 0.60   
+    context.BR_DANGER_OUT = 0.50
+    context.BR_PRE_DANGER = 0.55  # New Buffer Threshold
     
     # 1. Load Whitelist & Theme Map
     excel_path = os.path.join(config.BASE_DIR, "ETF合并筛选结果.xlsx")
@@ -495,15 +518,75 @@ def get_ranking(context, current_dt):
     expected_5d_vol = vol_ruler * np.sqrt(5)
     r5_z_score = r5_raw / expected_5d_vol
     
-    # 3. Dynamic Gate Threshold (k sigma)
-    # Default to 1.6 (Robust Plateau: 1.5~1.8). 
-    # Logic: With "Quiet Downside Vol" as ruler, drops > 1.6 sigma are toxic.
-    # Note: K=2.0 allowed "mildly broken" structures that hurt perf (31% vs 44%).
-    k_sigma = float(os.environ.get('OPT_R5_K', 1.6)) 
+    # 3. Dynamic Gate Thresholds (Split Micro/Macro)
+    # K_ENTRY: Micro Gate (Individual stock filtering) - Default 1.6
+    # K_CRASH: Macro Gate (Systemic failure detection) - Default 2.5
+    k_entry = float(os.environ.get('OPT_R5_K', 1.6)) 
+    k_crash = float(os.environ.get('OPT_K_CRASH', 2.5))
     
+    # --- META-GATE: Broken Ratio Calculation (Capital Layer) ---
+    # Calculate how many "trees are falling" in the forest
+    if r5_z_score is not None:
+        # Filter Z-Scores to Whitelist (Market Universe)
+        universe_z = r5_z_score[r5_z_score.index.isin(context.whitelist)].dropna()
+        
+        if len(universe_z) >= 20: # Min Sample Size to avoid noise
+            # Count broken structures using K_CRASH (Systemic Fire)
+            broken_count = (universe_z < -k_crash).sum()
+            br_raw = broken_count / len(universe_z)
+            
+            # Smooth BR (Mean of last 3 days)
+            context.br_history.append(br_raw)
+            if len(context.br_history) > 3: context.br_history.pop(0)
+            br_smooth = np.mean(context.br_history)
+            
+            # --- V3 Upgrade: Dynamic Threshold (Breadth + Depth) ---
+            # If Market Depth is bad (Median Z < -2.3), lower the Danger threshold.
+            median_z = np.median(universe_z)
+            effective_danger_in = context.BR_DANGER_IN # Default 0.60
+            if median_z < -2.3:
+                effective_danger_in = 0.50 # Less aggressive penalty (was 0.40)
+            
+            # 1. State Machine Transition (Hysteresis Logic)
+            prev_state = context.market_state
+            
+            if context.market_state == 'SAFE':
+                if br_smooth > context.BR_CAUTION_IN:
+                    context.market_state = 'CAUTION'
+            elif context.market_state == 'CAUTION':
+                if br_smooth > effective_danger_in: # Dynamic: 0.60 or 0.40
+                    context.market_state = 'DANGER'
+                elif br_smooth < context.BR_CAUTION_OUT:
+                    context.market_state = 'SAFE'
+            elif context.market_state == 'DANGER':
+                if br_smooth < context.BR_DANGER_OUT:
+                    context.market_state = 'CAUTION'
+            
+            # 2. Assign Risk Scaler (Action Mapping)
+            # Firefighter V2: Non-linear escalation
+            if context.market_state == 'SAFE':
+                context.risk_scaler = 1.0
+            elif context.market_state == 'CAUTION':
+                 # Buffer Zone: If approaching 60%, cut exposure to 70%
+                 if br_smooth >= context.BR_PRE_DANGER:
+                     context.risk_scaler = 0.7 
+                 else:
+                     context.risk_scaler = 1.0 # Ignore "Noise" (<55%)
+            elif context.market_state == 'DANGER':
+                context.risk_scaler = 0.0 # Shutdown
+            
+            # LOG DATA for Analysis: Date, BR_Raw, BR_Smooth, State, Risk_Scaler
+            # Tag: METAGATE_LOG
+            print(f"METAGATE_LOG,{current_dt},{br_raw:.4f},{br_smooth:.4f},{context.market_state},{context.risk_scaler}")
+
+            if context.market_state != prev_state:
+                print(f"[{current_dt}] 🚦 METAGATE: {prev_state} -> {context.market_state} (BR={br_smooth:.1%}, Scaler={context.risk_scaler})")
+
+    # --- Individual Gate ---
     is_structure_intact = pd.Series(True, index=base_scores.index)
-    if k_sigma > 0 and r5_raw is not None:
-         is_structure_intact = r5_z_score > -k_sigma
+    if k_entry > 0 and r5_raw is not None:
+         # "Gate": Keep only if r5 z-score > -k_entry (Filtering weak stocks)
+         is_structure_intact = r5_z_score > -k_entry
 
     # Apply Gate: Zero out scores for broken structures
     base_scores = base_scores * is_structure_intact.astype(float)
@@ -717,11 +800,27 @@ def algo(context):
             usable_cash = active_tranche.cash * 0.99
             
             # Position Sizing
+            # 1. Existing Dynamic Position (Trend)
+            regime_scale = 1.0
             if DYNAMIC_POSITION:
-                market_position = get_market_regime(context, current_dt)
-                allocate_cash = usable_cash * market_position
-            else:
-                allocate_cash = usable_cash
+                regime_scale = get_market_regime(context, current_dt)
+            
+            # 2. Meta-Gate Risk Scaler (Broken Ratio)
+            meta_scale = 1.0
+            if ENABLE_META_GATE:
+                meta_scale = getattr(context, 'risk_scaler', 1.0)
+            
+            # Combined
+            final_scale = regime_scale * meta_scale
+            allocate_cash = usable_cash * final_scale
+            
+            # Logging / Monitoring
+            current_scaler = getattr(context, 'risk_scaler', 1.0)
+            if current_scaler < 1.0:
+                if ENABLE_META_GATE:
+                     print(f"   🛡️ Risk Control: Allocation x {meta_scale:.1f} (Meta-Gate) -> Final {final_scale:.1%}")
+                else:
+                     print(f"   🛡️ [Ghost Mode] Meta-Gate signaled {current_scaler:.1f}, but ignored for performance.")
             
             # --- AGGRESSIVE CLAMPING REMOVED ---
             # Trust the internal ledger (active_tranche.cash) because sells will settle.

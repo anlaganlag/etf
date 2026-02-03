@@ -12,11 +12,37 @@ load_dotenv()
 
 TOP_N = 4
 REBALANCE_PERIOD_T = 10
-STOP_LOSS = 0.30
-TRAILING_TRIGGER = 0.15
-TRAILING_DROP = 0.03
+STOP_LOSS = 0.30          # 止损 30%
+TRAILING_TRIGGER = 0.15   # 15% 开启追踪止盈
+TRAILING_DROP = 0.03      # 回落 3% 止盈退出
+
+# TOP_N = 4
+# REBALANCE_PERIOD_T = 10
+# STOP_LOSS = 0.20
+# TRAILING_TRIGGER = 0.15
+# EBALANCE_PERIOD_T = 10
+# STOP_LOSS = 0.20
+# TRAILING_TRIGGER = 0.15
+# TRAILING_DROP = 0.05
+
+# 原止损止盈参数
+# STOP_LOSS = 0.05  # 止损
+# TRAILING_TRIGGER = 0.06 # 止盈
+# TRAILING_DROP = 0.02  # 止盈回落
+
+
+
+# --- 原始参数  ---
+# TOP_N = 5
+# REBALANCE_PERIOD_T = 13
+# STOP_LOSS = 0.20  # 止损
+# TRAILING_TRIGGER = 0.10 # 止盈
+# TRAILING_DROP = 0.05  # 止盈回落
+
+
 
 # START_DATE = os.environ.get('GM_START_DATE', '2021-12-03 09:00:00')
+# END_DATE = os.environ.get('GM_END_DATE', '2026-01-23 16:00:00')
 
 
 START_DATE='2021-12-03 09:00:00'
@@ -398,64 +424,192 @@ def get_market_regime(context, current_dt):
 
     return final_pos
 
-
 def get_ranking(context, current_dt):
-    # V6 Score Logic
     history = context.prices_df[context.prices_df.index <= current_dt]
     if len(history) < 251: return None, None
 
-    base_scores = pd.Series(0.0, index=history.columns)
-    # periods_rule = {1: 20, 3: 30, 5: 50, 10: 70, 20: 100}  # 反转权重：长期优先
-
-    # 修改为激进版 (Inverse Middle - breakthrough 40% Return):
-    periods_rule = {1: 50, 3: -70, 5: -70, 10: 0, 20: 150}
-
-    
-    # Calculate returns for all periods
-    # Note: rets_dict will store the raw returns for sorting tie-breaking
-    rets_dict = {}
     last_row = history.iloc[-1]
+    base_scores = pd.Series(0.0, index=history.columns)
+    
+    # Updated Optimal Weights (Decoupled Logic)
+    # R1=30, R3=-70, R5=0 (Linear 'weight' is 0, but we will use it as a Gate), R20=150
+    periods_rule = {1: 30, 3: -70, 5: 0, 10: 0, 20: 150}
+
+    rets_dict = {}
+    r5_raw = None # Capture R5 constraints
     
     for p, pts in periods_rule.items():
-        # r_p = (current / t-p) - 1
+        # 这里使用绝对涨幅，不对比 HS300
         rets = (last_row / history.iloc[-(p+1)]) - 1
         rets_dict[f'r{p}'] = rets
         
+        if p == 5:
+            r5_raw = rets 
+
+        # 直接按收益排名
         ranks = rets.rank(ascending=False, method='min')
         
+        # Skip calculation if weight is 0
+        if pts != 0:
+            if SCORING_METHOD == 'SMOOTH':
+                decay = (30 - ranks) / 30
+                decay = decay.clip(lower=0)
+                base_scores += decay * pts
+            else: 
+                base_scores += (ranks <= 15) * pts
+    
+    # --- Structural Gate (Non-linear Filter) ---
+    # Upgrade: Dynamic Volatility Gate (Z-Score)
+    # Instead of fixed -8%, check if drop exceeds k * sigma.
+    # Logic: Structure is BROKEN if the drop is statistically abnormal (e.g. > 2 sigma).
+    
+    # --- Structural Gate (Non-linear Filter) ---
+    # Upgrade: Dynamic Volatility Gate (Z-Score) with ROBUST Ruler
+    # Ruler = Lagged Downside Volatility
+    # 1. Lagged: Use t-65 to t-5 (Pre-crash volatility) to avoid "Adaptive Failure"
+    # 2. Downside: Only measure downside risk to avoid punishing upside volatility
+    
+    daily_rets = history.pct_change()
+    
+    # Lagged slice: Exclude last 5 days from the ruler
+    lagged_rets = daily_rets.iloc[:-5].tail(60) 
+    
+    # Downside only: Measure std dev of negative returns
+    downside_rets = lagged_rets[lagged_rets < 0]
+    
+    # Calculate per-symbol metrics
+    vol_down = downside_rets.std()
+    vol_full = lagged_rets.std()
+    count_down = downside_rets.count()
+    
+    # Vectorized fallback: Use downside vol if > 10 points, else full vol
+    # Note: vol_down or vol_full can be NaN if column is empty
+    vol_ruler = vol_down.where(count_down > 10, vol_full)
+    
+    # Fill remaining NaNs and apply floor
+    vol_ruler = vol_ruler.fillna(0.01)
+    vol_ruler = vol_ruler.clip(lower=0.005)
+
+    # 2. Calculate Z-Score of the 5-day return
+    # Expected 5-day vol = daily_vol * sqrt(5)
+    expected_5d_vol = vol_ruler * np.sqrt(5)
+    r5_z_score = r5_raw / expected_5d_vol
+    
+    # 3. Dynamic Gate Threshold (k sigma)
+    # Default to 1.6 (Robust Plateau: 1.5~1.8). 
+    # Logic: With "Quiet Downside Vol" as ruler, drops > 1.6 sigma are toxic.
+    # Note: K=2.0 allowed "mildly broken" structures that hurt perf (31% vs 44%).
+    k_sigma = float(os.environ.get('OPT_R5_K', 1.6)) 
+    
+    is_structure_intact = pd.Series(True, index=base_scores.index)
+    if k_sigma > 0 and r5_raw is not None:
+         is_structure_intact = r5_z_score > -k_sigma
+
+    # Apply Gate: Zero out scores for broken structures
+    base_scores = base_scores * is_structure_intact.astype(float)
+
+    # 2. 限制在白名单内
+    valid_scores = base_scores[base_scores.index.isin(context.whitelist)]
+    
+    # 3. 基础得分阈值
+    valid_scores = valid_scores[valid_scores >= MIN_SCORE]
+    
+    if valid_scores.empty: return None, base_scores
+
+    data_to_df = {
+        'score': valid_scores, 
+        'theme': [context.theme_map.get(c, 'Unknown') for c in valid_scores.index],
+        'etf_code': valid_scores.index 
+    }
+    
+    for p in periods_rule.keys():
+        data_to_df[f'r{p}'] = rets_dict[f'r{p}'][valid_scores.index]
+
+    df = pd.DataFrame(data_to_df)
+    
+    # 还原排序逻辑：Score -> r1 (短动量) -> 其他周期 -> Code
+    sort_cols = ['score', 'r1', 'r3', 'r5', 'r10', 'r20', 'etf_code']
+    asc_order = [False, False, False, False, False, False, True]
+    
+    return df.sort_values(by=sort_cols, ascending=asc_order), base_scores
+
+
+
+    # V6.1 Score Logic: Module 1 (Relative Alpha) + Module 2 (Trend Filter)
+    history = context.prices_df[context.prices_df.index <= current_dt]
+    if len(history) < 251: return None, None
+
+    last_row = history.iloc[-1]
+    
+    # === Module 2: 趋势过滤 (Trend Filter) ===
+    # 核心逻辑：只有处于“可趋势区”的标的才参与评分
+    ma20 = history.tail(20).mean()
+    ma60 = history.tail(60).mean()
+    # 判断：价格在20日均线上方（短期走强）且不处于严重的长期破位（价格>MA60或MA20>MA60）
+    is_trending = (last_row > ma20) & (last_row > ma60)
+    
+    # --- Module 1: 相对强度模块 (Relative Alpha) ---
+    # 获取同期的 HS300 表现作为基准
+    hs300_hist = None
+    if context.hs300 is not None:
+        hs300_hist = context.hs300[context.hs300.index <= current_dt]
+
+    base_scores = pd.Series(0.0, index=history.columns)
+    # 激进版权重：保持原有的 Inverse Middle 逻辑
+    periods_rule = {1: 50, 3: -70, 5: -70, 10: 0, 20: 150}
+    
+    rets_dict = {}
+    for p, pts in periods_rule.items():
+        # 计算绝对涨幅
+        rets = (last_row / history.iloc[-(p+1)]) - 1
+        rets_dict[f'r{p}'] = rets
+        
+        # 计算 Alpha (超额收益)
+        if hs300_hist is not None and len(hs300_hist) > p:
+            hs300_p_ret = (hs300_hist.iloc[-1] / hs300_hist.iloc[-(p+1)]) - 1
+            alpha = rets - hs300_p_ret
+        else:
+            alpha = rets # 降级为绝对收益
+            
+        # 基于 Alpha 进行排名
+        ranks = alpha.rank(ascending=False, method='min')
+        
         if SCORING_METHOD == 'SMOOTH':
-             # 平滑评分：前30名线性得分 (第1名100%，第15名53%，第30名3%)
-             # 解决了第15名和第16名的断崖问题
              decay = (30 - ranks) / 30
              decay = decay.clip(lower=0)
              base_scores += decay * pts
         else: # 'STEP' 原版
              base_scores += (ranks <= 15) * pts
     
-    # Filter
+    # --- 最终整合过滤 ---
+    # 1. 应用趋势过滤 (Module 2)
+    # 趋势不好的标的得分直接清零，不参与后续 TopN 选拔
+    base_scores = base_scores * is_trending.astype(float)
+    
+    # 2. 限制在白名单内
     valid_scores = base_scores[base_scores.index.isin(context.whitelist)]
+    
+    # 3. 基础得分阈值
     valid_scores = valid_scores[valid_scores >= MIN_SCORE]
     
     if valid_scores.empty: return None, base_scores
 
-    # Construct DataFrame with all return metrics for sorting
+    # 构建结果 DataFrame 用于排序
+    # 即使评分一样，我们也优先选绝对收益最好的标的或者是代码更考前的以保证确定性
     data_to_df = {
         'score': valid_scores, 
         'theme': [context.theme_map.get(c, 'Unknown') for c in valid_scores.index],
-        'etf_code': valid_scores.index # For final deterministic tie-breaking
+        'etf_code': valid_scores.index 
     }
     
-    # Add returns to DataFrame data dict
     for p in periods_rule.keys():
-        # Align rets to valid_scores index
         data_to_df[f'r{p}'] = rets_dict[f'r{p}'][valid_scores.index]
 
     df = pd.DataFrame(data_to_df)
     
-    # Sort by: Score -> r1 -> r3 -> r5 -> r10 -> r20 -> Code
-    # All returns Descending, Code Ascending
-    sort_cols = ['score', 'r1', 'r3', 'r5', 'r10', 'r20', 'etf_code']
-    asc_order = [False, False, False, False, False, False, True]
+    # 排序：得分 -> 20日绝对收益 -> 1日收益 -> 代码
+    sort_cols = ['score', 'r20', 'r1', 'etf_code']
+    asc_order = [False, False, False, True]
     
     return df.sort_values(by=sort_cols, ascending=asc_order), base_scores
 
@@ -685,14 +839,14 @@ if __name__ == '__main__':
         print(f"⚠️ 请确认已在掘金终端将账户 [658419cf-ffe1-11f0-a908-00163e022aa6] 绑定到策略 [{STRATEGY_ID}]")
         
         run(strategy_id=STRATEGY_ID, 
-            filename='gm_strategy_rolling0.py', 
+            filename='gm_strategy_rolling0 copy.py', 
             mode=MODE_LIVE,
             token=os.getenv('MY_QUANT_TGM_TOKEN'))
             
     else:
         print(f"📉 正在启动回测...")
         run(strategy_id=STRATEGY_ID, 
-            filename='gm_strategy_rolling0.py', 
+            filename='gm_strategy_rolling0 copy.py', 
             mode=MODE_BACKTEST,
             token=os.getenv('MY_QUANT_TGM_TOKEN'), 
             backtest_start_time=START_DATE, 
