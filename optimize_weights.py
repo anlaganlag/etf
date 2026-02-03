@@ -2,89 +2,103 @@ import subprocess
 import os
 import re
 import pandas as pd
-import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Define Archetypes
-WEIGHT_CONFIGS = {
-    "Long-Term (Baseline)": {1: 20, 3: 30, 5: 50, 10: 70, 20: 100},
-    "Short-Term (Burst)":   {1: 100, 3: 70, 5: 50, 10: 30, 20: 10},
-    "Balanced":             {1: 50, 3: 50, 5: 50, 10: 50, 20: 50},
-    "Super-Long":           {1: 0, 3: 0, 5: 20, 10: 50, 20: 100},
-    "Super-Short":          {1: 100, 3: 50, 5: 20, 10: 0, 20: 0},
-    "Step-Up":              {1: 10, 3: 20, 5: 40, 10: 80, 20: 160}, # Steep long-term
-    "Step-Down":            {1: 160, 3: 80, 5: 40, 10: 20, 20: 10}, # Steep short-term
-    "Barbell":              {1: 100, 3: 0, 5: 0, 10: 0, 20: 100},   # R1 + R20 (Breakout + Trend)
-    "Pure R20":             {1: 0, 3: 0, 5: 0, 10: 0, 20: 100},     # Only Long Term
-    "Pure R1":              {1: 100, 3: 0, 5: 0, 10: 0, 20: 0},     # Only Short Term
-    "Inverse Middle":       {1: 50, 3: -20, 5: -20, 10: 0, 20: 100},# Punish mid-term noise
-}
+# Expanded range to test Structural Hypothesis
+# Anchor: R20 = 150 (Trend)
+# Question 1: Is R5 (Structure) Negative (Mean Reversion) or Positive (Trend Follow)?
+# Question 2: Is R3 (Sentiment) Noise or Signal?
 
-# Output File
-RESULTS_FILE = "optimization_results_weights.csv"
+R1_RANGE = [30, 50, 70]
+R3_RANGE = [-70, -30, 0]
+R5_RANGE = [-70, -30, 0, 30] # Added positive test
+# R20 fixed at 150
 
-def parse_output(output_str):
-    res = {'Return': 0.0, 'MaxDD': 0.0, 'Sharpe': 0.0}
-    try:
-        if "=== SIMULATED REPORT" not in output_str:
-            return res
-        sim_section = output_str.split("=== SIMULATED REPORT")[-1]
-        
-        ret_match = re.search(r"Return:\s*([\d\.\-]+)%", sim_section)
-        dd_match = re.search(r"Max DD:\s*([\d\.\-]+)%", sim_section)
-        sharpe_match = re.search(r"Sharpe:\s*([\d\.\-]+)", sim_section)
-        
-        if ret_match: res['Return'] = float(ret_match.group(1))
-        if dd_match: res['MaxDD'] = float(dd_match.group(1))
-        if sharpe_match: res['Sharpe'] = float(sharpe_match.group(1))
-    except Exception as e:
-        print(f"Error parsing output: {e}")
-    return res
+RESULTS_FILE = "weight_optimization_results.csv"
+MAX_PARALLEL = 3
 
-results = []
-print("Starting Weight Optimization...")
-
-for name, weights in WEIGHT_CONFIGS.items():
-    print(f"Running Config: {name}...")
-    
+def run_backtest(r1, r3, r5):
     env = os.environ.copy()
-    env['GM_SCORING_WEIGHTS'] = json.dumps(weights)
+    env["OPT_W_R1"] = str(r1)
+    env["OPT_W_R3"] = str(r3)
+    env["OPT_W_R5"] = str(r5)
+    env["OPT_W_R20"] = "150" # Fixed
     
-    # Ensure optimal params from previous step are used
-    env['GM_TOP_N'] = "3"
-    env['GM_REBALANCE_T'] = "10"
+    # Ensure risk params are optimal
+    env["OPT_STOP_LOSS"] = "0.30"
+    env["OPT_TRAILING_TRIGGER"] = "0.15"
+    env["OPT_TRAILING_DROP"] = "0.03"
+    
+    env["GM_MODE"] = "BACKTEST"
+    env["GRID_SEARCH"] = "True"
     
     try:
-        process = subprocess.run(
-            ['python', 'gm_strategy_rolling0.py'], 
-            env=env, 
-            capture_output=True, 
+        result = subprocess.run(
+            ["python", "gm_strategy_rolling0.py"],
+            env=env,
+            capture_output=True,
             text=True,
-            cwd=os.getcwd()
+            encoding='utf-8', 
+            timeout=600 
         )
         
-        if process.returncode != 0:
-            print(f"Error running {name}: {process.stderr[-200:]}")
-            metric = {'Return': -999, 'MaxDD': 0, 'Sharpe': 0}
+        output = result.stdout
+        
+        ret_match = re.search(r"Return: ([\d.-]+)%", output)
+        mdd_match = re.search(r"Max DD: ([\d.-]+)%", output)
+        sharpe_match = re.search(r"Sharpe: ([\d.-]+)", output)
+        
+        if ret_match and mdd_match and sharpe_match:
+            ret = float(ret_match.group(1))
+            mdd = float(mdd_match.group(1))
+            sharpe = float(sharpe_match.group(1))
+            return {"r1": r1, "r3": r3, "r5": r5, "return": ret, "mdd": mdd, "sharpe": sharpe}
         else:
-            metric = parse_output(process.stdout)
+            return None
+    except:
+        return None
+
+def main():
+    configs = []
+    for r1 in R1_RANGE:
+        for r3 in R3_RANGE:
+            for r5 in R5_RANGE:
+                configs.append((r1, r3, r5))
+
+    results = []
+    if os.path.exists(RESULTS_FILE):
+        try:
+            existing_df = pd.read_csv(RESULTS_FILE)
+            results = existing_df.to_dict('records')
+        except: pass
+
+    completed_configs = set([(r['r1'], r['r3'], r['r5']) for r in results])
+    to_run = [c for c in configs if c not in completed_configs]
+
+    print(f"Total configs: {len(configs)}, To run: {len(to_run)}")
+    
+    with ThreadPoolExecutor(max_workers=MAX_PARALLEL) as executor:
+        future_to_config = {executor.submit(run_backtest, r1, r3, r5): (r1, r3, r5) for (r1, r3, r5) in to_run}
+        
+        count = 0
+        for future in as_completed(future_to_config):
+            count += 1
+            r1, r3, r5 = future_to_config[future]
+            res = future.result()
             
-        print(f"  Result: Return={metric['Return']}%, Sharpe={metric['Sharpe']}")
-        
-        results.append({
-            'Config Name': name,
-            'Weights': str(weights),
-            'Return': metric['Return'],
-            'MaxDD': metric['MaxDD'],
-            'Sharpe': metric['Sharpe']
-        })
-        
-    except Exception as e:
-        print(f"Exception running {name}: {e}")
+            if res:
+                results.append(res)
+                print(f"[{count}/{len(to_run)}] R1={r1}, R3={r3}, R5={r5} -> Ret: {res['return']}%, Shp: {res['sharpe']}")
+                pd.DataFrame(results).to_csv(RESULTS_FILE, index=False)
+            else:
+                print(f"[{count}/{len(to_run)}] R1={r1}, R3={r3}, R5={r5} -> FAILED")
 
-df = pd.DataFrame(results)
-df.sort_values(by='Return', ascending=False, inplace=True)
-df.to_csv(RESULTS_FILE, index=False)
+    if results:
+        df = pd.DataFrame(results)
+        best_ret = df.sort_values(by="return", ascending=False).iloc[0]
+        
+        print("\n--- WEIGHT OPTIMIZATION FINISHED ---")
+        print(f"Best Return: {best_ret['return']}% (R1={best_ret['r1']}, R3={best_ret['r3']}, R5={best_ret['r5']})")
 
-print("\n=== Best Configurations ===")
-print(df)
-print(f"\nResults saved to {RESULTS_FILE}")
+if __name__ == "__main__":
+    main()

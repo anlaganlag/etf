@@ -431,9 +431,12 @@ def get_ranking(context, current_dt):
     last_row = history.iloc[-1]
     base_scores = pd.Series(0.0, index=history.columns)
     
-    # 核心：Inverse Middle 激进版权重
-    periods_rule = {1: 50, 3: -70, 5: -70, 10: 0, 20: 150}
-    
+    # Updated Optimal Weights (Decoupled Logic)
+    # R1=30: Lower trigger needed (don't chase only big pops)
+    # R3=-70: Strong sentiment mean reversion (hate 3-day rallies)
+    # R5=0: Structure neutral (don't punish 5-day trends)
+    periods_rule = {1: 30, 3: -70, 5: 0, 10: 0, 20: 150}
+
     rets_dict = {}
     for p, pts in periods_rule.items():
         # 这里使用绝对涨幅，不对比 HS300
@@ -443,12 +446,14 @@ def get_ranking(context, current_dt):
         # 直接按收益排名
         ranks = rets.rank(ascending=False, method='min')
         
-        if SCORING_METHOD == 'SMOOTH':
-            decay = (30 - ranks) / 30
-            decay = decay.clip(lower=0)
-            base_scores += decay * pts
-        else: 
-            base_scores += (ranks <= 15) * pts
+        # Skip calculation if weight is 0 to save time/noise
+        if pts != 0:
+            if SCORING_METHOD == 'SMOOTH':
+                decay = (30 - ranks) / 30
+                decay = decay.clip(lower=0)
+                base_scores += decay * pts
+            else: 
+                base_scores += (ranks <= 15) * pts
     
     # 这一步非常关键：移除 is_trending.astype(float) 过滤
     valid_scores = base_scores[base_scores.index.isin(context.whitelist)]
@@ -475,7 +480,6 @@ def get_ranking(context, current_dt):
 
 
 
-def get_ranking_explore(context, current_dt):
     # V6.1 Score Logic: Module 1 (Relative Alpha) + Module 2 (Trend Filter)
     history = context.prices_df[context.prices_df.index <= current_dt]
     if len(history) < 251: return None, None
