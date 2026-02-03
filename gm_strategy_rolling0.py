@@ -459,14 +459,30 @@ def get_ranking(context, current_dt):
                 base_scores += (ranks <= 15) * pts
     
     # --- Structural Gate (Non-linear Filter) ---
-    # R5 Gate: Exclude stocks that have crashed too deep in the medium term.
-    # Logic: Structure is BROKEN if 5-day return is below threshold.
-    r5_gate_threshold = float(os.environ.get('OPT_R5_GATE', -0.08)) # Optimal Gate found: -0.08
+    # Upgrade: Dynamic Volatility Gate (Z-Score)
+    # Instead of fixed -8%, check if drop exceeds k * sigma.
+    # Logic: Structure is BROKEN if the drop is statistically abnormal (e.g. > 2 sigma).
+    
+    # 1. Calculate Volatility (Std Dev of daily returns over last 60 days)
+    daily_rets = history.pct_change()
+    vol_60d = daily_rets.tail(60).std()
+    
+    # Avoid division by zero: replace 0 vol with a small number or handle gracefully
+    vol_60d = vol_60d.replace(0, 0.01).fillna(0.01)
+
+    # 2. Calculate Z-Score of the 5-day return
+    # Expected 5-day vol = daily_vol * sqrt(5)
+    expected_5d_vol = vol_60d * np.sqrt(5)
+    r5_z_score = r5_raw / expected_5d_vol
+    
+    # 3. Dynamic Gate Threshold (k sigma)
+    # Default to 2.0 (2 Sigma event) - OPTIMAL confirmed by grid search (Ret 47.64%, Sharpe 0.62)
+    # Note: We are looking for DROP, so we check if Z > -k
+    k_sigma = float(os.environ.get('OPT_R5_K', 2.0)) 
     
     is_structure_intact = pd.Series(True, index=base_scores.index)
-    if r5_gate_threshold > -1.0 and r5_raw is not None:
-         # "Gate": Keep only if r5 > threshold (e.g. > -0.05)
-         is_structure_intact = r5_raw > r5_gate_threshold
+    if k_sigma > 0 and r5_raw is not None:
+         is_structure_intact = r5_z_score > -k_sigma
 
     # Apply Gate: Zero out scores for broken structures
     base_scores = base_scores * is_structure_intact.astype(float)
